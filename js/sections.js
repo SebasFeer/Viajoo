@@ -559,20 +559,20 @@ function bookingSearchUrl(trip) {
 }
 
 /**
- * Enlace de búsqueda de vuelos en Booking.com. OJO: a diferencia de
- * hoteles, el buscador de vuelos de Booking no tiene una URL de
- * búsqueda por texto libre documentada (usa códigos de aeropuerto
- * IATA para origen/destino, que no pedimos en la app), así que esto
- * es "mejor esfuerzo": intenta precargar el destino, pero si Booking
- * no lo reconoce, el usuario cae en su buscador de vuelos igual y
- * solo tiene que escribirlo. Mismo hueco de afiliado que arriba.
+ * Enlace a Skyscanner para buscar vuelos. A propósito NO intenta
+ * precargar el destino: Skyscanner arma sus URLs de búsqueda con
+ * "códigos de entidad" internos para origen y destino (no el nombre
+ * de la ciudad tal cual), y además haría falta un aeropuerto de
+ * origen que la app nunca pide — no hay forma fiable de construir
+ * ese enlace desde aquí. Es mejor llevar a la portada del buscador de
+ * vuelos y que la persona escriba el destino una vez, que arriesgarse
+ * a un enlace que parece prellenado pero apunta a un sitio erróneo.
+ * Para sumar ingresos de afiliado hace falta darse de alta en un
+ * programa que incluya Skyscanner (p. ej. Travelpayouts) y añadir
+ * aquí el parámetro de campaña que den.
  */
-function flightSearchUrl(trip) {
-  const destination = trip.destination || trip.name || "";
-  if (!destination) return "https://www.booking.com/flights/";
-  const params = new URLSearchParams({ type: "ONEWAY", adults: "1", to: destination });
-  if (trip.start_date) params.set("depart", trip.start_date);
-  return `https://www.booking.com/flights/index.html?${params.toString()}`;
+function flightSearchUrl() {
+  return "https://www.skyscanner.net/";
 }
 
 /**
@@ -959,7 +959,7 @@ function openTransportForm(trip, t) {
 function quickBookGridHtml(title) {
   const tiles = [
     { id: "qb-hotels", icon: "🏨", label: "Hotel", sub: "Booking.com", color: "#003b95" },
-    { id: "qb-flights", icon: "✈️", label: "Vuelo", sub: "Booking.com", color: "#003b95" },
+    { id: "qb-flights", icon: "✈️", label: "Vuelo", sub: "Skyscanner", color: "#0770e3" },
     { id: "qb-activities", icon: "🎟️", label: "Actividades", sub: "Civitatis", color: "#e0483e" },
   ];
   return h`
