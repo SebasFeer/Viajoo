@@ -1285,13 +1285,26 @@ async function openShareTripSheet(trip) {
     }
   });
 
+  // Si la librería qrcode.js (cargada desde un CDN en index.html) no
+  // llegó a cargar en este dispositivo (bloqueador de anuncios, red
+  // restrictiva, fallo puntual del CDN...), no nos quedamos sin QR en
+  // silencio: se cae a una imagen de un servicio público de QR, que
+  // no depende de ningún script — solo una petición de imagen, como
+  // cualquier foto de la app.
+  function renderQrFallbackImage() {
+    const wrap = overlay.querySelector("#share-qr-wrap");
+    if (!wrap) return;
+    const qrText = encodeURIComponent(shareCodeToQrText(res.code));
+    wrap.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${qrText}" width="190" height="190" alt="Código QR para unirse al viaje" />`;
+  }
+
   const qrCanvas = overlay.querySelector("#share-qr-canvas");
   if (typeof QRCode !== "undefined" && typeof QRCode.toCanvas === "function") {
     QRCode.toCanvas(qrCanvas, shareCodeToQrText(res.code), { width: 190, margin: 1 }, (err) => {
-      if (err) overlay.querySelector("#share-qr-wrap")?.remove();
+      if (err) renderQrFallbackImage();
     });
   } else {
-    overlay.querySelector("#share-qr-wrap")?.remove();
+    renderQrFallbackImage();
   }
 }
 
