@@ -514,3 +514,14 @@ a.pass:hover { transform: translateY(-2px); }
 .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--brand-soft); border-top-color: var(--brand); animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 [hidden] { display: none !important; }
+
+/* ---------- Todo en la web ---------- */
+.web-feats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.web-feat { background: var(--card); border-radius: 24px; padding: 22px; box-shadow: var(--shadow); }
+.web-feat .code { display: inline-block; font: 700 12px var(--f-mono); letter-spacing: .08em; color: var(--brand); background: var(--paper-2); padding: 5px 9px; border-radius: 8px; margin-bottom: 14px; }
+.web-feat h4 { font-size: 17px; margin: 0 0 6px; }
+.web-feat p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.web-cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 36px; }
+.web-note { text-align: center; margin-top: 14px; }
+@media (max-width: 960px) { .web-feats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .web-feats { grid-template-columns: 1fr 1fr; gap: 10px; } .web-feat { padding: 16px; border-radius: 18px; } }

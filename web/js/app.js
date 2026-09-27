@@ -1361,7 +1361,7 @@ async function pullOrPush() {
 
 let justLoggedIn = false;
 
-function renderLogin(mode = "login") {
+function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "login") {
   $("#user-slot").innerHTML = "";
   app.innerHTML = `
     <div class="auth-grid">
@@ -1391,7 +1391,7 @@ function renderLogin(mode = "login") {
       </div>
     </div>`;
 
-  app.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => renderLogin(b.dataset.mode)));
+  app.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => renderLogin(b.dataset.mode === "signup" ? "signup" : "login")));
   const err = $("#login-error");
   $("#btn-google").addEventListener("click", async () => {
     err.textContent = "";
