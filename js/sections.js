@@ -558,6 +558,48 @@ function bookingSearchUrl(trip) {
   return `https://www.booking.com/searchresults.html?${params.toString()}`;
 }
 
+/**
+ * Enlace de búsqueda de vuelos en Booking.com. OJO: a diferencia de
+ * hoteles, el buscador de vuelos de Booking no tiene una URL de
+ * búsqueda por texto libre documentada (usa códigos de aeropuerto
+ * IATA para origen/destino, que no pedimos en la app), así que esto
+ * es "mejor esfuerzo": intenta precargar el destino, pero si Booking
+ * no lo reconoce, el usuario cae en su buscador de vuelos igual y
+ * solo tiene que escribirlo. Mismo hueco de afiliado que arriba.
+ */
+function flightSearchUrl(trip) {
+  const destination = trip.destination || trip.name || "";
+  if (!destination) return "https://www.booking.com/flights/";
+  const params = new URLSearchParams({ type: "ONEWAY", adults: "1", to: destination });
+  if (trip.start_date) params.set("depart", trip.start_date);
+  return `https://www.booking.com/flights/index.html?${params.toString()}`;
+}
+
+/**
+ * Enlace a la página de actividades/excursiones de Civitatis para el
+ * destino del viaje. Civitatis organiza sus páginas por ciudad
+ * (civitatis.com/es/{ciudad}/, sin buscador por texto libre fiable),
+ * así que se arma el slug a partir del nombre de la ciudad (antes de
+ * la primera coma, sin acentos ni mayúsculas). Para destinos poco
+ * turísticos o mal escritos puede no existir esa página exacta —
+ * Civitatis entonces muestra su portada en vez de dar error, así que
+ * nunca se rompe, solo pierde la precampilación. Para sumar ingresos
+ * de afiliado hace falta darse de alta en el Programa de Afiliados de
+ * Civitatis y añadir aquí el parámetro de campaña (`?ref=...` o el
+ * que ellos indiquen) con el ID que den.
+ */
+function civitatisSearchUrl(trip) {
+  const destination = trip.destination || trip.name || "";
+  const city = destination.split(",")[0].trim();
+  const slug = city
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `https://www.civitatis.com/es/${slug}/` : "https://www.civitatis.com/es/";
+}
+
 async function renderHotels(trip) {
   const hotels = await Data.getAllByTrip("hotels", trip.id);
   hotels.sort((a, b) => (a.check_in || "").localeCompare(b.check_in || ""));
@@ -910,6 +952,37 @@ function openTransportForm(trip, t) {
 // RESERVAS
 // ============================================================
 
+/** Grid de 3 accesos rápidos a webs externas de reserva (hoteles y
+ * vuelos en Booking.com, actividades en Civitatis), pensado para la
+ * pestaña de Reservas. Un color propio por tarjeta ayuda a
+ * distinguirlas de un vistazo. */
+function quickBookGridHtml(trip) {
+  const tiles = [
+    { id: "qb-hotels", icon: "🏨", label: "Hotel", sub: "Booking.com", color: "#003b95" },
+    { id: "qb-flights", icon: "✈️", label: "Vuelo", sub: "Booking.com", color: "#003b95" },
+    { id: "qb-activities", icon: "🎟️", label: "Actividades", sub: "Civitatis", color: "#e0483e" },
+  ];
+  return h`
+    <div class="quickbook-grid">
+      ${tiles
+        .map(
+          (tl) => h`
+        <button type="button" class="quickbook-tile" id="${tl.id}">
+          <span class="quickbook-tile-icon" style="--tile-color:${tl.color};">${tl.icon}</span>
+          <span class="quickbook-tile-label">${tl.label}</span>
+          <span class="quickbook-tile-sub">${tl.sub}</span>
+        </button>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function wireQuickBookGrid(trip) {
+  document.getElementById("qb-hotels")?.addEventListener("click", () => window.open(bookingSearchUrl(trip), "_blank", "noopener"));
+  document.getElementById("qb-flights")?.addEventListener("click", () => window.open(flightSearchUrl(trip), "_blank", "noopener"));
+  document.getElementById("qb-activities")?.addEventListener("click", () => window.open(civitatisSearchUrl(trip), "_blank", "noopener"));
+}
+
 async function renderReservations(trip) {
   const items = await Data.getAllByTrip("reservations", trip.id);
   items.sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
@@ -939,9 +1012,10 @@ async function renderReservations(trip) {
         .join("")
     : emptyState("🎟️", t("empty_reservations"));
 
-  section(list);
+  section(quickBookGridHtml(trip) + list);
   setFab(fabBtn());
 
+  wireQuickBookGrid(trip);
   wireTicketActions("reservations", items, (r) => openReservationForm(trip, r), (r) => openMapsAppPicker({ type: "point", location: r.location }));
   document.getElementById("fab-add").addEventListener("click", () => openReservationForm(trip));
   fetchStubPhotos("reservations", items, "location");
