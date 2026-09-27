@@ -1,5 +1,5 @@
 // ============================================================
-// app.js — Viajoo en la web (mis-viajes.html).
+// app.js — Viajoo en la web (index.html).
 //
 // Es otra interfaz sobre LOS MISMOS datos que la app:
 //   - db.js      -> mismo IndexedDB local ("travelplanner")
@@ -479,7 +479,6 @@ function headerUser() {
         <button type="button" data-act="settings" role="menuitem">⚙️ Ajustes</button>
         <button type="button" data-act="join" role="menuitem">🔗 Unirme a un viaje compartido</button>
         <button type="button" data-act="sync" role="menuitem">⟳ Sincronizar ahora</button>
-        <a href="./" role="menuitem">Ir a la web de Viajoo</a>
         <a href="legal.html#privacidad" role="menuitem">Privacidad</a>
         <button type="button" data-act="logout" class="danger" role="menuitem">Cerrar sesión</button>
       </div>
@@ -1367,9 +1366,14 @@ function renderLogin(mode = "login") {
     <div class="auth-grid">
       <div class="intro auth-photo">
         <img src="../img/wonders/taj-mahal.webp" alt="" />
-        <span class="label">Viajoo en la web</span>
-        <h1>Tus viajes, en pantalla grande.</h1>
-        <p>Entra con la misma cuenta de la app. Todo lo que cambies aquí aparece en el móvil, y al revés.</p>
+        <span class="label">Bienvenido a Viajoo</span>
+        <h1>Todo tu viaje, en un solo sitio.</h1>
+        <p>Vuelos, hoteles, itinerario, gastos compartidos, mapa, calendario y un copiloto con IA que te planifica los días.</p>
+        <ul class="auth-points">
+          <li>✈️ Tus planes ordenados por día y hora</li>
+          <li>💸 Gastos divididos con tus acompañantes</li>
+          <li>🔄 Tu cuenta sincronizada en todos tus dispositivos</li>
+        </ul>
       </div>
       <div class="auth-card">
         <div class="auth-tabs" role="tablist">
@@ -1387,7 +1391,7 @@ function renderLogin(mode = "login") {
           <p class="form-error" id="login-error" role="alert"></p>
           <button class="btn btn-primary btn-block" type="submit" id="btn-login">${mode === "signup" ? "Crear cuenta" : "Entrar"} <span class="arrow">→</span></button>
         </form>
-        <p class="muted small" style="margin:18px 0 0">${mode === "signup" ? "La contraseña debe tener al menos 6 caracteres." : "Usa el mismo email o cuenta de Google que en la app."}</p>
+        <p class="muted small" style="margin:18px 0 0">${mode === "signup" ? "La contraseña debe tener al menos 6 caracteres." : "¿Ya usas Viajoo en el móvil? Entra con la misma cuenta y verás tus viajes."}</p>
       </div>
     </div>`;
 

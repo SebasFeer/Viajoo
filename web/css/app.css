@@ -1,5 +1,5 @@
 /* ============================================================
-   app.css — La web como app (mis-viajes.html): acceso, lista de
+   app.css — La web como app (index.html): acceso, lista de
    viajes, ficha de cada viaje con sus secciones, formularios.
    Se carga DESPUÉS de web.css y reutiliza sus tokens.
    ============================================================ */
@@ -428,4 +428,10 @@
   .stg-item { flex-wrap: wrap; }
   .stg-item-solo .btn, .stg-list .stg-item .btn { margin-left: auto; }
   .shr-code { font-size: 22px; letter-spacing: .22em; }
+}
+
+.auth-points { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 8px; font-size: 15px; color: rgba(255,255,255,.9); }
+@media (max-width: 900px) {
+  .auth-grid .auth-card { order: -1; }
+  .auth-grid .auth-photo { min-height: 0; padding: 32px 26px; }
 }
