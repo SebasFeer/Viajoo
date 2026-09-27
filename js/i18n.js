@@ -58,7 +58,7 @@ const T = {
     zh: "搜索目的地：酒店和景点即时查询…",
     ar: "ابحث عن وجهة: فنادق وأماكن فوراً…",
   },
-  ai_plan_title: { es: "Planificar viaje con IA", en: "Plan a trip with AI", pt: "Planejar viagem com IA", zh: "用 AI 规划旅行", ar: "خطّط رحلة بالذكاء الاصطناعي" },
+  ai_plan_title: { es: "¿Planificamos tu viaje?", en: "Shall we plan your trip?", pt: "Vamos planejar sua viagem?", zh: "一起规划你的旅行吧？", ar: "هل نخطط لرحلتك؟" },
   ai_plan_subtitle: {
     es: "Dinos el destino y tus gustos, y te armamos el itinerario",
     en: "Tell us the destination and your tastes, and we'll build the itinerary",
