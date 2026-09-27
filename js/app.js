@@ -44,6 +44,7 @@ import { icon, brandMark, googleIcon } from "./icons.js";
 import { geocode, searchPlaces as searchPlaceSuggestions } from "./geocode.js";
 import { LANGUAGES, getLanguage, setLanguage, t } from "./i18n.js";
 import { nearbyAttractions, nearbyLodging, searchPlaces } from "./discover.js";
+import { sendContactMessage } from "./contact.js";
 
 // ============================================================
 // ESTADO
@@ -3199,7 +3200,7 @@ personal cuyo titular es:
 Titular: [NOMBRE Y APELLIDOS]
 DNI/NIF: [DNI/NIF]
 Domicilio: [DOMICILIO]
-Correo de contacto: [EMAIL DE CONTACTO]
+Correo de contacto: contacto@viajoo.es
 
 Por ahora Viajoo es una aplicación personal en fase de
 desarrollo y pruebas, sin actividad económica real todavía: la
@@ -3233,7 +3234,7 @@ const PRIVACY_POLICY_TEXT = `
 Responsable del tratamiento
 [NOMBRE Y APELLIDOS], con DNI/NIF [DNI/NIF] y domicilio en
 [DOMICILIO], es quien responde de los datos que trata esta aplicación.
-Puedes escribir a [EMAIL DE CONTACTO] para cualquier duda sobre esta
+Puedes escribir a contacto@viajoo.es para cualquier duda sobre esta
 política o para ejercer tus derechos.
 
 1. Qué datos guarda Viajoo
@@ -3329,7 +3330,7 @@ tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
 estos derechos tú mismo desde Ajustes → Copiar / restaurar datos
 (exportar o borrar) y Ajustes → Mi cuenta (eliminar la cuenta). Para lo
-que no puedas hacer directamente, escríbenos a [EMAIL DE CONTACTO]. Si
+que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
@@ -3346,7 +3347,7 @@ una cuenta o activar funciones que impliquen guardar datos en la nube.
 
 15. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
-[EMAIL DE CONTACTO].
+contacto@viajoo.es.
 `.trim();
 
 const TERMS_OF_USE_TEXT = `
@@ -3366,7 +3367,7 @@ una cuenta.
 3. Tu cuenta
 Crear una cuenta es opcional. Si lo haces, eres responsable de
 mantener segura tu contraseña y de la actividad que ocurra con tu
-cuenta. Avísanos en [EMAIL DE CONTACTO] si sospechas un uso no
+cuenta. Avísanos en contacto@viajoo.es si sospechas un uso no
 autorizado.
 
 4. Uso aceptable
@@ -3456,7 +3457,7 @@ servicio.
 
 6. Reclamaciones de propiedad intelectual
 Si crees que algo en la app infringe tus derechos de propiedad
-intelectual, escríbenos a [EMAIL DE CONTACTO] con el detalle para poder
+intelectual, escríbenos a contacto@viajoo.es con el detalle para poder
 revisarlo.
 `.trim();
 
@@ -3505,12 +3506,12 @@ const CONTACT_COMPLAINTS_TEXT = `
 
 1. Contacto
 Para cualquier duda, incidencia o solicitud sobre tus datos, escribe a
-[EMAIL DE CONTACTO].
+contacto@viajoo.es.
 
 2. Reclamaciones
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
-- Pedir la hoja de reclamaciones escribiendo a [EMAIL DE CONTACTO].
+- Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
 - Si eres consumidor de la Unión Europea y la reclamación es sobre una
   compra Pro (cuando exista cobro real), acudir a la plataforma
   europea de resolución de litigios en línea:
@@ -3622,6 +3623,7 @@ function openLegalSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-ip">${icon("edit")} Propiedad intelectual</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-cookies">${icon("settings")} Cookies y almacenamiento local</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact">${icon("bell")} Contacto y reclamaciones</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact-form">✉️ Enviar un mensaje</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-subscription">${icon("wallet")} Condiciones de suscripción Pro</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-licenses">${icon("link")} Licencias de terceros</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="lg-close">${t("common_close")}</button></div>
@@ -3640,8 +3642,78 @@ function openLegalSheet() {
   go("#lg-ip", "Propiedad intelectual", INTELLECTUAL_PROPERTY_TEXT);
   go("#lg-cookies", "Cookies y almacenamiento local", COOKIES_TEXT);
   go("#lg-contact", "Contacto y reclamaciones", CONTACT_COMPLAINTS_TEXT);
+  overlay.querySelector("#lg-contact-form").addEventListener("click", () => {
+    openSubSheet(overlay, openContactFormSheet);
+  });
   go("#lg-subscription", "Condiciones de suscripción Pro", SUBSCRIPTION_TERMS_TEXT);
   go("#lg-licenses", "Licencias de terceros", THIRD_PARTY_LICENSES_TEXT);
+}
+
+/**
+ * Formulario de contacto: manda el mensaje a contacto@viajoo.es a
+ * través de la Cloud Function "sendContactMessage" (ver
+ * js/contact.js). No hace falta tener cuenta para usarlo.
+ */
+function openContactFormSheet() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = h`
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h2 class="modal-title">✉️ Enviar un mensaje</h2>
+      <p style="color:var(--muted); font-size:13px; line-height:1.6; margin-top:-8px;">
+        ¿Dudas, un problema o algo que reclamar? Escríbenos y te
+        respondemos a tu email.
+      </p>
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="cf-name" autocomplete="name" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="cf-email" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Mensaje</label>
+        <textarea id="cf-message" rows="5"></textarea>
+      </div>
+      <input type="text" id="cf-website" name="website" autocomplete="off" tabindex="-1" style="position:absolute; left:-9999px;" aria-hidden="true" />
+      <p id="cf-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="cf-send">Enviar</button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="cf-close">Cerrar</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
+  overlay.querySelector("#cf-close").addEventListener("click", () => overlay.remove());
+
+  const nameEl = overlay.querySelector("#cf-name");
+  const emailEl = overlay.querySelector("#cf-email");
+  const messageEl = overlay.querySelector("#cf-message");
+  const websiteEl = overlay.querySelector("#cf-website");
+  const errorEl = overlay.querySelector("#cf-error");
+  const sendBtn = overlay.querySelector("#cf-send");
+
+  sendBtn.addEventListener("click", async () => {
+    errorEl.textContent = "";
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    const message = messageEl.value.trim();
+    if (!name || !email || !message) {
+      errorEl.textContent = "Rellena todos los campos.";
+      return;
+    }
+    sendBtn.disabled = true;
+    const { ok, error } = await sendContactMessage({ name, email, message, website: websiteEl.value });
+    sendBtn.disabled = false;
+    if (!ok) {
+      errorEl.textContent = error;
+      return;
+    }
+    overlay.remove();
+    toast("Mensaje enviado. Te responderemos a tu email.");
+  });
 }
 
 // ------------------------------------------------------------
