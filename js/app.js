@@ -15,7 +15,8 @@ import {
   currentUser,
   onAuthChange,
   signUp,
-  signIn,
+  signInSecure,
+  resetPassword,
   signInWithGoogle,
   signOutUser,
   pushToCloud,
@@ -38,7 +39,7 @@ import {
   openAiNewTripSheet,
 } from "./ai-copilot.js";
 import { getFlightStatus, isFlightStatusConfigured } from "./flightstatus.js";
-import { renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
+import { renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon, brandMark, googleIcon } from "./icons.js";
 import { geocode, searchPlaces as searchPlaceSuggestions } from "./geocode.js";
@@ -804,7 +805,6 @@ async function renderTripShell() {
     <div class="view has-tabbar" id="section-content"></div>
     <div id="fab-slot"></div>
     ${renderTabbarHtml("trip")}
-    <div id="print-area"></div>
   `;
 
   root.querySelector("#btn-back").addEventListener("click", () => goBack());
@@ -995,7 +995,6 @@ function openTripMenu(trip) {
       }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-pdf">${icon("download")} Itinerario en PDF (Pro)</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-ics">${icon("calendar")} Exportar a calendario (.ics)</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-print">${icon("printer")} Exportar / Imprimir</button></div>
       <div class="modal-actions"><button class="btn btn-danger" id="mn-delete">${icon("trash")} Eliminar viaje</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="mn-close">Cerrar</button></div>
     </div>`;
@@ -1032,11 +1031,6 @@ function openTripMenu(trip) {
       state.tripId = null;
       withTransition(renderApp, "back");
     }
-  });
-  overlay.querySelector("#mn-print").addEventListener("click", async () => {
-    overlay.remove();
-    await renderPrintArea(trip);
-    setTimeout(() => window.print(), 150);
   });
   overlay.querySelector("#mn-pdf").addEventListener("click", async () => {
     overlay.remove();
@@ -2422,6 +2416,9 @@ function renderAuthForm() {
         <label>Contraseña</label>
         <input type="password" id="auth-password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" />
       </div>
+      <p style="margin: -6px 0 0; text-align:right;">
+        <button type="button" class="link-btn" id="auth-forgot" style="font-size:12.5px;">¿Olvidaste tu contraseña?</button>
+      </p>
       <p id="auth-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
       <div class="modal-actions">
         <button class="btn btn-primary" id="auth-login">Iniciar sesión</button>
@@ -2472,12 +2469,27 @@ function renderAuthForm() {
     if (birthDate) await saveBirthDate(birthDate);
   });
 
-  overlay.querySelector("#auth-login").addEventListener("click", async () => {
+  overlay.querySelector("#auth-login").addEventListener("click", async (e) => {
     errorEl.textContent = "";
-    const { user, error } = await signIn(emailEl.value.trim(), passEl.value);
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const { user, error } = await signInSecure(emailEl.value.trim(), passEl.value);
+    btn.disabled = false;
     if (error) { errorEl.textContent = error; return; }
     overlay.remove();
     await afterLogin(user);
+  });
+
+  overlay.querySelector("#auth-forgot").addEventListener("click", async () => {
+    errorEl.textContent = "";
+    const email = emailEl.value.trim();
+    if (!email) {
+      errorEl.textContent = "Escribe tu email arriba primero.";
+      return;
+    }
+    const { ok, error } = await resetPassword(email);
+    if (!ok) { errorEl.textContent = error; return; }
+    toast("Te hemos enviado un email para restablecer tu contraseña.");
   });
 
   overlay.querySelector("#auth-signup").addEventListener("click", async () => {

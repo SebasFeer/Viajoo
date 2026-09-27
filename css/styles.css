@@ -966,6 +966,15 @@ a { color: inherit; }
   background: var(--border);
 }
 
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+}
+
 .field-check {
   display: flex;
   align-items: center;
@@ -2099,23 +2108,6 @@ html.tp-skip-splash #splash-screen {
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(25%); opacity: 0; }
 }
-
-/* ============================================================
-   PANTALLA DE IMPRESIÓN
-   ============================================================ */
-
-@media print {
-  body * { visibility: hidden; }
-  #print-area, #print-area * { visibility: visible; }
-  #print-area {
-    position: absolute;
-    top: 0; left: 0; width: 100%;
-    color: #111;
-    background: #fff;
-  }
-}
-
-#print-area { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

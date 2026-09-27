@@ -2058,9 +2058,8 @@ async function exportMapPdf(trip, located, dayLabel) {
 }
 
 // ------------------------------------------------------------
-// ITINERARIO COMPLETO EN PDF (Pro) — a diferencia de "Exportar /
-// Imprimir" (que delega en el diálogo de impresión del navegador con
-// una tabla básica), esto genera un PDF de verdad con jsPDF: portada
+// ITINERARIO COMPLETO EN PDF (Pro) — genera un PDF de verdad con
+// jsPDF: portada
 // con el nombre del viaje, y una sección con su propio color de
 // acento por tipo de dato (vuelos, hoteles, itinerario día a día,
 // transporte, reservas, gastos y checklist).
@@ -2565,61 +2564,6 @@ async function deleteAndRefresh(storeName, id, message) {
   await renderApp();
 }
 
-// ============================================================
-// VISTA DE IMPRESIÓN (sustituye a la exportación PDF con ReportLab)
-// ============================================================
-
-async function renderPrintArea(trip) {
-  const [flights, hotels, itin, transport, reservations, expenses, checklist] = await Promise.all([
-    Data.getAllByTrip("flights", trip.id),
-    Data.getAllByTrip("hotels", trip.id),
-    Data.getAllByTrip("itinerary", trip.id),
-    Data.getAllByTrip("transport", trip.id),
-    Data.getAllByTrip("reservations", trip.id),
-    Data.getAllByTrip("expenses", trip.id),
-    Data.getAllByTrip("checklist", trip.id),
-  ]);
-
-  const total = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-
-  const table = (headers, rows) => h`
-    <table style="width:100%; border-collapse:collapse; margin-bottom:18px; font-size:13px;">
-      <thead><tr>${headers.map((hd) => `<th style="text-align:left; border-bottom:1px solid #999; padding:4px;">${hd}</th>`).join("")}</tr></thead>
-      <tbody>${rows
-        .map((r) => `<tr>${r.map((c) => `<td style="padding:4px; border-bottom:1px solid #ddd;">${escapeHtml(c)}</td>`).join("")}</tr>`)
-        .join("")}</tbody>
-    </table>`;
-
-  const html = h`
-    <h1 style="font-family:Georgia,serif;">${escapeHtml(trip.name)}</h1>
-    <p>${escapeHtml(trip.destination)} · ${formatDatePretty(trip.start_date)} → ${formatDatePretty(trip.end_date)}</p>
-    ${trip.notes ? `<p><em>${escapeHtml(trip.notes)}</em></p>` : ""}
-
-    <h2>Vuelos</h2>
-    ${flights.length ? table(["Fecha","Hora","Aerolínea","Nº","Origen","Destino"], flights.map((f) => [f.date,f.time,f.airline,f.flight_number,f.origin,f.destination])) : "<p>Sin vuelos.</p>"}
-
-    <h2>Hoteles</h2>
-    ${hotels.length ? table(["Nombre","Dirección","Entrada","Salida","Precio"], hotels.map((hh) => [hh.name,hh.address,hh.check_in,hh.check_out,money(hh.price)])) : "<p>Sin hoteles.</p>"}
-
-    <h2>Itinerario</h2>
-    ${itin.length ? table(["Fecha","Hora","Título","Lugar"], itin.map((i) => [i.date,i.time,i.title,i.location])) : "<p>Sin actividades.</p>"}
-
-    <h2>Transporte</h2>
-    ${transport.length ? table(["Fecha","Tipo","Origen","Destino","Precio"], transport.map((t) => [t.date,t.type,t.origin,t.destination,money(t.price)])) : "<p>Sin transportes.</p>"}
-
-    <h2>Reservas</h2>
-    ${reservations.length ? table(["Fecha","Tipo","Nombre","Lugar","Precio"], reservations.map((r) => [r.date,r.type,r.name,r.location,money(r.price)])) : "<p>Sin reservas.</p>"}
-
-    <h2>Gastos (total: ${money(total)})</h2>
-    ${expenses.length ? table(["Fecha","Categoría","Descripción","Importe"], expenses.map((e) => [e.date,e.category,e.description,money(e.amount)])) : "<p>Sin gastos.</p>"}
-
-    <h2>Checklist</h2>
-    ${checklist.length ? table(["Estado","Tarea"], checklist.map((c) => [c.completed ? "OK" : "Pendiente", c.task])) : "<p>Sin tareas.</p>"}
-  `;
-
-  document.getElementById("print-area").innerHTML = html;
-}
-
 // ------------------------------------------------------------
 // EXPORTAR AL CALENDARIO DEL DISPOSITIVO (.ics) — solo bajo demanda.
 // Genera un único archivo .ics con vuelos, hoteles, itinerario,
@@ -2804,4 +2748,4 @@ async function exportTripToIcs(trip) {
   toast("Calendario descargado — ábrelo con tu app de calendario para añadirlo");
 }
 
-export { TABS, renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };
+export { TABS, renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };

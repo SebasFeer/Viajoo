@@ -62,8 +62,6 @@ const PATHS = {
   theme: `<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17Z" fill="currentColor" stroke="none"/>`,
   // Dos flechas en círculo — actualizar / sincronizar desde la nube.
   refresh: `<path d="M4 12a8 8 0 0 1 14.5-4.5"/><path d="M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-14.5 4.5"/><path d="M4 20v-4.5h4.5"/>`,
-  // Impresora — exportar / imprimir el viaje.
-  printer: `<rect x="5" y="8.5" width="14" height="7" rx="1.5"/><path d="M7 8.5V4.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v4"/><rect x="7.5" y="14" width="9" height="6" rx="1"/>`,
   // Flecha hacia una bandeja — exportar copia / descargar.
   download: `<path d="M12 4v10.5"/><path d="M8 11l4 4 4-4"/><path d="M5 18.5h14"/>`,
   // Flecha desde una bandeja — subir datos a la nube.

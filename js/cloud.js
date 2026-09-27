@@ -7,6 +7,7 @@
 
 import { firebaseConfig } from "./firebase-config.js";
 import { Data, STORES, onDataChange } from "./db.js";
+import { LOGIN_ENDPOINT } from "./login-config.js";
 
 const SDK_BASE = "https://www.gstatic.com/firebasejs/12.19.0";
 
@@ -221,6 +222,58 @@ async function signIn(email, password) {
     return { user: cred.user, error: null };
   } catch (err) {
     return { user: null, error: friendlyAuthError(err) };
+  }
+}
+
+/**
+ * Inicio de sesión con protección anti fuerza bruta: en vez de
+ * comprobar la contraseña directamente desde el navegador, se manda
+ * a la Cloud Function "loginWithPassword" (ver login-config.js), que
+ * cuenta los intentos fallidos por cuenta en el servidor y aplica
+ * bloqueos progresivos (no se puede esquivar borrando datos locales
+ * ni cambiando de dispositivo). Si la contraseña es correcta, la
+ * función devuelve un "custom token" que se usa aquí para completar
+ * el inicio de sesión con el SDK normal de Firebase.
+ */
+async function signInSecure(email, password) {
+  if (!LOGIN_ENDPOINT) {
+    return { user: null, error: "El inicio de sesión no está disponible ahora mismo." };
+  }
+  let data;
+  try {
+    const res = await fetch(LOGIN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { user: null, error: data.error || "No se pudo iniciar sesión. Inténtalo de nuevo.", adminLocked: !!data.adminLocked };
+    }
+  } catch (err) {
+    return { user: null, error: "Sin conexión. Revisa tu internet e inténtalo de nuevo." };
+  }
+
+  try {
+    const s = await ensureFirebase();
+    const cred = await s.authMod.signInWithCustomToken(s.auth, data.token);
+    return { user: cred.user, error: null };
+  } catch (err) {
+    return { user: null, error: friendlyAuthError(err) };
+  }
+}
+
+/** Envía el email de "restablecer contraseña" de Firebase a la
+ * dirección indicada. Firebase responde igual si el email existe o
+ * no, así no se puede usar para averiguar qué cuentas están
+ * registradas. */
+async function resetPassword(email) {
+  try {
+    const s = await ensureFirebase();
+    await s.authMod.sendPasswordResetEmail(s.auth, email);
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: friendlyAuthError(err) };
   }
 }
 
@@ -560,6 +613,8 @@ export {
   onAuthChange,
   signUp,
   signIn,
+  signInSecure,
+  resetPassword,
   signInWithGoogle,
   completeGoogleRedirect,
   signOutUser,
