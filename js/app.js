@@ -39,7 +39,16 @@ import {
   openAiNewTripSheet,
 } from "./ai-copilot.js";
 import { getFlightStatus, isFlightStatusConfigured } from "./flightstatus.js";
-import { renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
+import {
+  renderSection,
+  exportItineraryPdf,
+  exportTripToIcs,
+  openCurrencyConverterSheet,
+  bookingSearchUrl,
+  flightSearchUrl,
+  civitatisSearchUrl,
+  quickBookGridHtml,
+} from "./sections.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon, brandMark, googleIcon } from "./icons.js";
 import { geocode, searchPlaces as searchPlaceSuggestions } from "./geocode.js";
@@ -1605,7 +1614,7 @@ async function renderHome() {
       <button class="ai-plan-cta" id="btn-ai-plan-trip">
         <span class="ai-plan-cta-art">✨</span>
         <span class="ai-plan-cta-text">
-          <strong>${t("ai_plan_title")} · Pro</strong>
+          <strong>${t("ai_plan_title")}</strong>
           <span>${t("ai_plan_subtitle")}</span>
         </span>
         <span class="ai-plan-cta-arrow">${icon("chevron")}</span>
@@ -1615,9 +1624,9 @@ async function renderHome() {
       <div id="destination-search"></div>
       <div class="hero-cta-row">
         <button class="hero-cta" id="fab-new-trip">${t("new_trip")}</button>
-        <button class="hero-quick-btn" id="btn-booking-search" title="Buscar en Booking.com">${icon("hotels")}</button>
         <button class="hero-quick-btn" id="btn-currency-converter" title="${t("currency_converter")}">${icon("wallet")}</button>
       </div>
+      ${quickBookGridHtml("Reserva rápido")}
       <div class="section-title-row">
         <p class="section-title">${t("my_trips")}</p>
         ${trips.length > 3 ? `<button class="see-all" id="see-all-trips">${t("see_all")} ${icon("chevron")}</button>` : ""}
@@ -1733,14 +1742,21 @@ async function renderHome() {
   root.querySelector("#fab-new-trip").addEventListener("click", () => openTripForm());
   root.querySelector("#btn-settings").addEventListener("click", () => openSettingsSheet());
   root.querySelector("#btn-ai-plan-trip").addEventListener("click", () => openAiNewTripSheet());
-  // Búsqueda en Booking.com — a diferencia del conversor de moneda, esta
-  // es gratis para todo el mundo, con o sin cuenta. Sin un viaje
-  // concreto (estamos en el inicio), usa lo que se haya escrito en el
-  // buscador de destino como ciudad, si hay algo.
-  root.querySelector("#btn-booking-search").addEventListener("click", () => {
+  // Accesos rápidos de reserva externa — a diferencia del conversor de
+  // moneda, son gratis para todo el mundo, con o sin cuenta. Sin un
+  // viaje concreto (estamos en el inicio), usan lo que se haya
+  // escrito en el buscador de destino como ciudad, si hay algo.
+  root.querySelector("#qb-hotels").addEventListener("click", () => {
     const destination = searchEl.value.trim();
-    const url = destination ? bookingSearchUrl({ destination }) : "https://www.booking.com/";
-    window.open(url, "_blank", "noopener");
+    window.open(destination ? bookingSearchUrl({ destination }) : "https://www.booking.com/", "_blank", "noopener");
+  });
+  root.querySelector("#qb-flights").addEventListener("click", () => {
+    const destination = searchEl.value.trim();
+    window.open(destination ? flightSearchUrl({ destination }) : "https://www.booking.com/flights/", "_blank", "noopener");
+  });
+  root.querySelector("#qb-activities").addEventListener("click", () => {
+    const destination = searchEl.value.trim();
+    window.open(destination ? civitatisSearchUrl({ destination }) : "https://www.civitatis.com/es/", "_blank", "noopener");
   });
   root.querySelector("#btn-currency-converter").addEventListener("click", async () => {
     if (!(await hasProAccess())) {

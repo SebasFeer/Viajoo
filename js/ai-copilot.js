@@ -13,6 +13,7 @@ import { getIdToken } from "./cloud.js";
 import { Data } from "./db.js";
 import { h, toast, state, withTransition, renderApp, openRegisterInviteSheet, hasProAccess, checkPaidQueryLimit, bumpPaidQueryCount, syncPaidQueryLimitReached, PAID_QUERY_LIMIT } from "./app.js";
 import { escapeHtml, formatDatePretty, money, daysBetween } from "./utils.js";
+import { quickBookGridHtml, wireQuickBookGrid } from "./sections.js";
 
 async function checkAiCopilotAccess() {
   if (!isAiCopilotConfigured()) {
@@ -587,7 +588,8 @@ async function openAiPlannerSheet(trip, onApplied) {
       return;
     }
 
-    body.innerHTML = resultPreviewHtml(result) + aiPlanShareRowHtml();
+    body.innerHTML = resultPreviewHtml(result) + quickBookGridHtml("Reserva rápido para este viaje") + aiPlanShareRowHtml();
+    wireQuickBookGrid(body, trip);
     wireAiPlanShareRow(body, trip, result);
     overlay.querySelector(".modal-actions").innerHTML = `
       <button type="button" class="btn btn-ghost" id="ai-discard">Descartar</button>
@@ -775,8 +777,10 @@ async function openAiNewTripSheet() {
       return;
     }
 
-    body.innerHTML = resultPreviewHtml(result) + aiPlanShareRowHtml();
-    wireAiPlanShareRow(body, { name: destination, destination, start_date: startDate, end_date: endDate }, result);
+    const newTripInfo = { name: destination, destination, start_date: startDate, end_date: endDate };
+    body.innerHTML = resultPreviewHtml(result) + quickBookGridHtml("Reserva rápido para este viaje") + aiPlanShareRowHtml();
+    wireQuickBookGrid(body, newTripInfo);
+    wireAiPlanShareRow(body, newTripInfo, result);
     overlay.querySelector(".modal-actions").innerHTML = `
       <button type="button" class="btn btn-ghost" id="ai-new-discard">Descartar</button>
       <button type="button" class="btn btn-primary" id="ai-new-apply">✅ Crear viaje y aplicar</button>`;

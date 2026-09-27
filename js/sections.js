@@ -956,13 +956,14 @@ function openTransportForm(trip, t) {
  * vuelos en Booking.com, actividades en Civitatis), pensado para la
  * pestaña de Reservas. Un color propio por tarjeta ayuda a
  * distinguirlas de un vistazo. */
-function quickBookGridHtml(trip) {
+function quickBookGridHtml(title) {
   const tiles = [
     { id: "qb-hotels", icon: "🏨", label: "Hotel", sub: "Booking.com", color: "#003b95" },
     { id: "qb-flights", icon: "✈️", label: "Vuelo", sub: "Booking.com", color: "#003b95" },
     { id: "qb-activities", icon: "🎟️", label: "Actividades", sub: "Civitatis", color: "#e0483e" },
   ];
   return h`
+    ${title ? `<p class="section-title" style="margin:14px 0 8px;">${escapeHtml(title)}</p>` : ""}
     <div class="quickbook-grid">
       ${tiles
         .map(
@@ -977,10 +978,15 @@ function quickBookGridHtml(trip) {
     </div>`;
 }
 
-function wireQuickBookGrid(trip) {
-  document.getElementById("qb-hotels")?.addEventListener("click", () => window.open(bookingSearchUrl(trip), "_blank", "noopener"));
-  document.getElementById("qb-flights")?.addEventListener("click", () => window.open(flightSearchUrl(trip), "_blank", "noopener"));
-  document.getElementById("qb-activities")?.addEventListener("click", () => window.open(civitatisSearchUrl(trip), "_blank", "noopener"));
+/** `container` acota la búsqueda de los botones a ese elemento (nunca
+ * a todo el document): el mismo grid puede aparecer más de una vez
+ * en el DOM a la vez (p. ej. dentro de un modal de IA abierto sobre
+ * la propia pestaña de Reservas), y buscar por id en todo el
+ * documento conectaría los clics con el grid equivocado. */
+function wireQuickBookGrid(container, trip) {
+  container.querySelector("#qb-hotels")?.addEventListener("click", () => window.open(bookingSearchUrl(trip), "_blank", "noopener"));
+  container.querySelector("#qb-flights")?.addEventListener("click", () => window.open(flightSearchUrl(trip), "_blank", "noopener"));
+  container.querySelector("#qb-activities")?.addEventListener("click", () => window.open(civitatisSearchUrl(trip), "_blank", "noopener"));
 }
 
 async function renderReservations(trip) {
@@ -1012,10 +1018,10 @@ async function renderReservations(trip) {
         .join("")
     : emptyState("🎟️", t("empty_reservations"));
 
-  section(quickBookGridHtml(trip) + list);
+  section(quickBookGridHtml() + list);
   setFab(fabBtn());
 
-  wireQuickBookGrid(trip);
+  wireQuickBookGrid(document.getElementById("section-content"), trip);
   wireTicketActions("reservations", items, (r) => openReservationForm(trip, r), (r) => openMapsAppPicker({ type: "point", location: r.location }));
   document.getElementById("fab-add").addEventListener("click", () => openReservationForm(trip));
   fetchStubPhotos("reservations", items, "location");
@@ -2822,4 +2828,15 @@ async function exportTripToIcs(trip) {
   toast("Calendario descargado — ábrelo con tu app de calendario para añadirlo");
 }
 
-export { TABS, renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };
+export {
+  TABS,
+  renderSection,
+  exportItineraryPdf,
+  exportTripToIcs,
+  openCurrencyConverterSheet,
+  bookingSearchUrl,
+  flightSearchUrl,
+  civitatisSearchUrl,
+  quickBookGridHtml,
+  wireQuickBookGrid,
+};
