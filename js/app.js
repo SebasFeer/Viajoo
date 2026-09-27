@@ -987,7 +987,7 @@ function openTripMenu(trip) {
           : ""
       }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-edit">${icon("edit")} Editar viaje</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-share">${icon("link")} ${trip.share_code ? "Compartir de nuevo" : "Compartir viaje (Pro)"}</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="mn-share">${icon("link")} Compartir viaje</button></div>
       ${
         trip.share_code
           ? `<div class="modal-actions"><button class="btn btn-secondary" id="mn-refresh-share">${icon("refresh")} Actualizar desde la nube</button></div>`
