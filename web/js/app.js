@@ -876,10 +876,19 @@ function renderFlights(body, trip, L) {
   );
 }
 
+// Misma búsqueda que la app (bookingSearchUrl en sections.js, #45).
+function bookingSearchUrl(trip) {
+  const params = new URLSearchParams({ ss: trip.destination || "" });
+  if (trip.start_date) params.set("checkin", trip.start_date);
+  if (trip.end_date) params.set("checkout", trip.end_date);
+  return `https://www.booking.com/searchresults.html?${params.toString()}`;
+}
+
 function renderHotels(body, trip, L) {
   const items = [...L.hotels].sort((a, b) => (a.check_in || "").localeCompare(b.check_in || ""));
   body.innerHTML =
     sectionBar("Hoteles", "hotels", "Añadir hotel") +
+    `<a class="booking-cta" href="${esc(bookingSearchUrl(trip))}" target="_blank" rel="noopener"><span aria-hidden="true">🏨</span><span><strong>Buscar en Booking.com</strong><small>Alojamientos en ${esc(trip.destination || "tu destino")} para las fechas del viaje</small></span><span class="arrow" aria-hidden="true">↗</span></a>` +
     (items.length
       ? `<div class="rows">${items
           .map((h) =>

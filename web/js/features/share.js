@@ -146,19 +146,33 @@ async function drawQr(root, code) {
   const note = root.querySelector("#shr-qr-note");
   const ok = await loadScript(QRCODE_SRC, "QRCode");
   if (!root.isConnected) return;
-  if (!ok || typeof window.QRCode?.toCanvas !== "function") {
-    note.textContent = "No se pudo cargar el QR (revisa tu conexión). El código funciona igual.";
-    return;
-  }
+  const scanHint = "Escanéalo desde la app: Ajustes → Unirme a un viaje compartido → Escanear QR.";
+  // Igual que la app (#48): si la librería no carga, se cae a una imagen
+  // de un servicio público de QR en vez de quedarse sin QR.
+  const fallback = () => {
+    const img = document.createElement("img");
+    img.width = 190;
+    img.height = 190;
+    img.alt = "Código QR para unirse al viaje";
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${encodeURIComponent(shareCodeToQrText(code))}`;
+    img.onload = () => {
+      wrap.hidden = false;
+      note.textContent = scanHint;
+    };
+    img.onerror = () => {
+      img.remove();
+      note.textContent = "No se pudo cargar el QR (revisa tu conexión). El código funciona igual.";
+    };
+    root.querySelector("#shr-qr-canvas")?.remove();
+    wrap.prepend(img);
+  };
+  if (!ok || typeof window.QRCode?.toCanvas !== "function") return fallback();
   const canvas = root.querySelector("#shr-qr-canvas");
   // Siempre negro sobre blanco (los lectores fallan con QR invertidos).
   window.QRCode.toCanvas(canvas, shareCodeToQrText(code), { width: 190, margin: 1 }, (err) => {
-    if (err) {
-      note.textContent = "No se pudo generar el QR. El código funciona igual.";
-      return;
-    }
+    if (err) return fallback();
     wrap.hidden = false;
-    note.textContent = "Escanéalo desde la app: Ajustes → Unirme a un viaje compartido → Escanear QR.";
+    note.textContent = scanHint;
   });
 }
 

@@ -367,7 +367,54 @@ async function renderLegal(panel, ctx) {
         ([id, title]) =>
           `<a class="stg-item stg-link" href="legal.html#${id}" target="_blank" rel="noopener"><b>${esc(title)}</b><span class="mono muted" aria-hidden="true">↗</span></a>`
       ).join("")}
-    </div>`;
+    </div>
+    <p class="muted small stg-note">¿Dudas o sugerencias? Escríbenos a <a href="mailto:contacto@viajoo.es">contacto@viajoo.es</a> o desde aquí, sin necesidad de cuenta.</p>
+    <button type="button" class="btn btn-secondary btn-sm" data-stg-contact>✉️ Enviar un mensaje</button>`;
+  panel.querySelector("[data-stg-contact]").addEventListener("click", () => openContactForm(ctx));
+}
+
+// Formulario de contacto (openContactFormSheet de la app, #47): usa
+// js/contact.js, que envía a la Cloud Function "sendContactMessage".
+function openContactForm(ctx) {
+  const { openSheet, toast, state } = ctx;
+  openSheet({
+    title: "Enviar un mensaje",
+    html: `
+      <p class="muted small">Te respondemos a tu email.</p>
+      <label class="field"><span class="label">Nombre</span><input type="text" id="cf-name" autocomplete="name" value="${ctx.esc(state.user?.displayName || "")}" /></label>
+      <label class="field"><span class="label">Email</span><input type="email" id="cf-email" autocomplete="email" value="${ctx.esc(state.user?.email || "")}" /></label>
+      <label class="field"><span class="label">Mensaje</span><textarea id="cf-message" rows="5"></textarea></label>
+      <input type="text" id="cf-website" name="website" autocomplete="off" tabindex="-1" style="position:absolute; left:-9999px;" aria-hidden="true" />
+      <p class="form-error" role="alert"></p>
+      <div class="foot"><div class="right"><button class="btn btn-primary" type="button" data-cf-send>Enviar</button></div></div>`,
+    onMount(root, close) {
+      const err = root.querySelector(".form-error");
+      const btn = root.querySelector("[data-cf-send]");
+      btn.addEventListener("click", async () => {
+        const name = root.querySelector("#cf-name").value.trim();
+        const email = root.querySelector("#cf-email").value.trim();
+        const message = root.querySelector("#cf-message").value.trim();
+        const website = root.querySelector("#cf-website").value;
+        err.textContent = "";
+        if (!email || !message) {
+          err.textContent = "Escribe tu email y el mensaje.";
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Enviando…";
+        const { sendContactMessage } = await import("../../../js/contact.js");
+        const res = await sendContactMessage({ name, email, message, website });
+        btn.disabled = false;
+        btn.textContent = "Enviar";
+        if (!res.ok) {
+          err.textContent = res.error;
+          return;
+        }
+        close();
+        toast("Mensaje enviado. ¡Gracias!");
+      });
+    },
+  });
 }
 
 // ------------------------------------------------------------

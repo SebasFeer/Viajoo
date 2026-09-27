@@ -7,7 +7,7 @@
 // copia el cambio aquí también.
 //
 // Los datos del titular siguen entre corchetes ([NOMBRE Y APELLIDOS],
-// [EMAIL DE CONTACTO]...) igual que en la app: hay que rellenarlos
+// [DNI/NIF], [DOMICILIO]) igual que en la app: hay que rellenarlos
 // con los datos reales antes de publicar.
 // ============================================================
 
@@ -28,7 +28,7 @@ personal cuyo titular es:
 Titular: [NOMBRE Y APELLIDOS]
 DNI/NIF: [DNI/NIF]
 Domicilio: [DOMICILIO]
-Correo de contacto: [EMAIL DE CONTACTO]
+Correo de contacto: contacto@viajoo.es
 
 Por ahora Viajoo es una aplicación personal en fase de
 desarrollo y pruebas, sin actividad económica real todavía: la
@@ -63,7 +63,7 @@ de consumidores en cuanto a juzgados y tribunales competentes.`,
 Responsable del tratamiento
 [NOMBRE Y APELLIDOS], con DNI/NIF [DNI/NIF] y domicilio en
 [DOMICILIO], es quien responde de los datos que trata esta aplicación.
-Puedes escribir a [EMAIL DE CONTACTO] para cualquier duda sobre esta
+Puedes escribir a contacto@viajoo.es para cualquier duda sobre esta
 política o para ejercer tus derechos.
 
 1. Qué datos guarda Viajoo
@@ -159,7 +159,7 @@ tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
 estos derechos tú mismo desde Ajustes → Copiar / restaurar datos
 (exportar o borrar) y Ajustes → Mi cuenta (eliminar la cuenta). Para lo
-que no puedas hacer directamente, escríbenos a [EMAIL DE CONTACTO]. Si
+que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
@@ -176,7 +176,7 @@ una cuenta o activar funciones que impliquen guardar datos en la nube.
 
 15. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
-[EMAIL DE CONTACTO].`,
+contacto@viajoo.es.`,
   },
   {
     id: "terminos",
@@ -197,7 +197,7 @@ una cuenta.
 3. Tu cuenta
 Crear una cuenta es opcional. Si lo haces, eres responsable de
 mantener segura tu contraseña y de la actividad que ocurra con tu
-cuenta. Avísanos en [EMAIL DE CONTACTO] si sospechas un uso no
+cuenta. Avísanos en contacto@viajoo.es si sospechas un uso no
 autorizado.
 
 4. Uso aceptable
@@ -288,7 +288,7 @@ servicio.
 
 6. Reclamaciones de propiedad intelectual
 Si crees que algo en la app infringe tus derechos de propiedad
-intelectual, escríbenos a [EMAIL DE CONTACTO] con el detalle para poder
+intelectual, escríbenos a contacto@viajoo.es con el detalle para poder
 revisarlo.`,
   },
   {
@@ -339,12 +339,12 @@ funcionar.`,
 
 1. Contacto
 Para cualquier duda, incidencia o solicitud sobre tus datos, escribe a
-[EMAIL DE CONTACTO].
+contacto@viajoo.es.
 
 2. Reclamaciones
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
-- Pedir la hoja de reclamaciones escribiendo a [EMAIL DE CONTACTO].
+- Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
 - Si eres consumidor de la Unión Europea y la reclamación es sobre una
   compra Pro (cuando exista cobro real), acudir a la plataforma
   europea de resolución de litigios en línea:

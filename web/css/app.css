@@ -437,3 +437,11 @@
 .tool.pulse { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 25%, transparent); animation: tool-pulse 1s ease 3; }
 @keyframes tool-pulse { 50% { transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .tool.pulse { animation: none; } }
+
+/* ---------- Booking.com (pestaña Hoteles) ---------- */
+.booking-cta { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; padding: 14px 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); color: var(--ink); text-decoration: none; box-shadow: var(--shadow); transition: transform .15s ease; }
+.booking-cta:hover { transform: translateY(-1px); }
+.booking-cta > span:first-child { font-size: 22px; }
+.booking-cta strong { display: block; }
+.booking-cta small { color: var(--ink-2); }
+.booking-cta .arrow { margin-left: auto; color: var(--brand); }
