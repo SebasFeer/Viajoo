@@ -1750,10 +1750,7 @@ async function renderHome() {
     const destination = searchEl.value.trim();
     window.open(destination ? bookingSearchUrl({ destination }) : "https://www.booking.com/", "_blank", "noopener");
   });
-  root.querySelector("#qb-flights").addEventListener("click", () => {
-    const destination = searchEl.value.trim();
-    window.open(destination ? flightSearchUrl({ destination }) : "https://www.booking.com/flights/", "_blank", "noopener");
-  });
+  root.querySelector("#qb-flights").addEventListener("click", () => window.open(flightSearchUrl(), "_blank", "noopener"));
   root.querySelector("#qb-activities").addEventListener("click", () => {
     const destination = searchEl.value.trim();
     window.open(destination ? civitatisSearchUrl({ destination }) : "https://www.civitatis.com/es/", "_blank", "noopener");
