@@ -347,3 +347,139 @@ exports.generateItinerary = onRequest(
     }
   }
 );
+
+// ============================================================
+// Cloud Function "sendContactMessage" — formulario de contacto.
+//
+// A diferencia de flightStatus/generateItinerary, esta NO exige
+// sesión iniciada: cualquiera (incluso alguien con problemas para
+// registrarse) tiene que poder escribir. Como es un endpoint
+// público, valida los campos y limita cuántos mensajes puede
+// mandar la misma dirección de email en un día, para frenar spam
+// básico sin necesitar un captcha.
+//
+// El mensaje SIEMPRE se guarda en Firestore (colección
+// "contact_messages"), así que nunca se pierde aunque el envío del
+// correo de abajo no esté configurado todavía. Para que además
+// llegue de verdad a contacto@viajoo.es hace falta:
+//   1. Crear una cuenta gratis en https://resend.com (u otro
+//      proveedor de email transaccional) y verificar el dominio
+//      viajoo.es (o usar su dominio de pruebas mientras tanto).
+//   2. Guardar la clave con:
+//      firebase functions:secrets:set RESEND_API_KEY
+//   3. Volver a desplegar esta función.
+// Mientras RESEND_API_KEY no esté configurada, el mensaje se guarda
+// igualmente en Firestore — se puede leer desde la consola de
+// Firebase — solo que no se envía el correo automático.
+// ============================================================
+
+const CONTACT_MESSAGE_MAX_LENGTH = 2000;
+const CONTACT_DAILY_LIMIT_PER_EMAIL = 5;
+const CONTACT_TO_EMAIL = "contacto@viajoo.es";
+
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/** Igual que reserveDailyQuota, pero por email (no por cuenta) y con
+ * su propio tope: evita que una misma dirección inunde el buzón. */
+async function reserveContactQuota(email) {
+  const today = todayUtcString();
+  const ref = admin.firestore().collection("contact_message_quota").doc(`${email}_${today}`);
+  return admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = snap.exists ? snap.data().count || 0 : 0;
+    if (count >= CONTACT_DAILY_LIMIT_PER_EMAIL) return { allowed: false };
+    tx.set(ref, { email, date: today, count: count + 1 }, { merge: true });
+    return { allowed: true };
+  });
+}
+
+exports.sendContactMessage = onRequest(
+  { secrets: [RESEND_API_KEY], cors: true },
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({ error: "Método no permitido." });
+        return;
+      }
+
+      const body = req.body || {};
+      const name = String(body.name || "").trim().slice(0, 200);
+      const email = String(body.email || "").trim().slice(0, 200);
+      const message = String(body.message || "").trim().slice(0, CONTACT_MESSAGE_MAX_LENGTH);
+      // Campo trampa: invisible para una persona, pero un bot que
+      // rellena todos los campos del formulario sí lo escribe.
+      const honeypot = String(body.website || "").trim();
+
+      if (honeypot) {
+        // No delatamos que se detectó como spam: respondemos como si
+        // hubiera ido bien para no darle pistas al bot.
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (!name || !email || !message) {
+        res.status(400).json({ error: "Faltan campos por rellenar." });
+        return;
+      }
+      if (!isValidEmail(email)) {
+        res.status(400).json({ error: "El email no es válido." });
+        return;
+      }
+      if (message.length < 10) {
+        res.status(400).json({ error: "Cuéntanos un poco más en el mensaje." });
+        return;
+      }
+
+      const quota = await reserveContactQuota(email);
+      if (!quota.allowed) {
+        res.status(429).json({ error: "Has enviado demasiados mensajes hoy. Inténtalo mañana." });
+        return;
+      }
+
+      await admin.firestore().collection("contact_messages").add({
+        name,
+        email,
+        message,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: "new",
+      });
+
+      // A lo mejor esfuerzo: si no hay clave de Resend configurada
+      // todavía (el secreto no admite un valor vacío, así que se
+      // deja este texto de marcador de posición hasta que se
+      // sustituya por la clave real), el mensaje ya quedó guardado
+      // arriba y no pasa nada.
+      if (RESEND_API_KEY.value() && RESEND_API_KEY.value() !== "PENDIENTE_DE_CONFIGURAR") {
+        try {
+          await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${RESEND_API_KEY.value()}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: "Viajoo <onboarding@resend.dev>",
+              to: [CONTACT_TO_EMAIL],
+              reply_to: email,
+              subject: `Nuevo mensaje de contacto de ${name}`,
+              text: `${message}\n\n—\n${name} <${email}>`,
+            }),
+          });
+        } catch (mailErr) {
+          // El mensaje ya está a salvo en Firestore; un fallo aquí no
+          // debe impedir responder "ok" a quien escribió.
+          console.error("Error enviando el email de contacto:", mailErr);
+        }
+      }
+
+      res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Error interno enviando el mensaje." });
+    }
+  }
+);

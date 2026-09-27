@@ -21,6 +21,8 @@ import {
   pushToCloud,
   pullFromCloud,
   cloudHasBackup,
+  saveBirthDate,
+  getBirthDate,
   shareTrip,
   joinSharedTrip,
   refreshSharedTrip,
@@ -36,12 +38,13 @@ import {
   openAiNewTripSheet,
 } from "./ai-copilot.js";
 import { getFlightStatus, isFlightStatusConfigured } from "./flightstatus.js";
-import { renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet } from "./sections.js";
+import { renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon, brandMark, googleIcon } from "./icons.js";
 import { geocode, searchPlaces as searchPlaceSuggestions } from "./geocode.js";
 import { LANGUAGES, getLanguage, setLanguage, t } from "./i18n.js";
 import { nearbyAttractions, nearbyLodging, searchPlaces } from "./discover.js";
+import { sendContactMessage } from "./contact.js";
 
 // ============================================================
 // ESTADO
@@ -984,7 +987,7 @@ function openTripMenu(trip) {
           : ""
       }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-edit">${icon("edit")} Editar viaje</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-share">${icon("link")} ${trip.share_code ? "Compartir de nuevo" : "Compartir viaje (Pro)"}</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="mn-share">${icon("link")} Compartir viaje</button></div>
       ${
         trip.share_code
           ? `<div class="modal-actions"><button class="btn btn-secondary" id="mn-refresh-share">${icon("refresh")} Actualizar desde la nube</button></div>`
@@ -1282,13 +1285,26 @@ async function openShareTripSheet(trip) {
     }
   });
 
+  // Si la librería qrcode.js (cargada desde un CDN en index.html) no
+  // llegó a cargar en este dispositivo (bloqueador de anuncios, red
+  // restrictiva, fallo puntual del CDN...), no nos quedamos sin QR en
+  // silencio: se cae a una imagen de un servicio público de QR, que
+  // no depende de ningún script — solo una petición de imagen, como
+  // cualquier foto de la app.
+  function renderQrFallbackImage() {
+    const wrap = overlay.querySelector("#share-qr-wrap");
+    if (!wrap) return;
+    const qrText = encodeURIComponent(shareCodeToQrText(res.code));
+    wrap.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${qrText}" width="190" height="190" alt="Código QR para unirse al viaje" />`;
+  }
+
   const qrCanvas = overlay.querySelector("#share-qr-canvas");
   if (typeof QRCode !== "undefined" && typeof QRCode.toCanvas === "function") {
     QRCode.toCanvas(qrCanvas, shareCodeToQrText(res.code), { width: 190, margin: 1 }, (err) => {
-      if (err) overlay.querySelector("#share-qr-wrap")?.remove();
+      if (err) renderQrFallbackImage();
     });
   } else {
-    overlay.querySelector("#share-qr-wrap")?.remove();
+    renderQrFallbackImage();
   }
 }
 
@@ -1563,7 +1579,11 @@ async function renderHome() {
     : `<p style="color:var(--muted); font-size:13px; padding:4px 2px; text-shadow:var(--text-halo);">${t("no_upcoming_events")}</p>`;
 
   const hour = new Date().getHours();
-  const greetWord = hour < 6 ? t("greet_night") : hour < 13 ? t("greet_morning") : hour < 21 ? t("greet_afternoon") : t("greet_night");
+  const loggedInUser = currentUser();
+  const firstName = loggedInUser && loggedInUser.displayName ? loggedInUser.displayName.trim().split(/\s+/)[0] : null;
+  const greetWord = firstName
+    ? t("greet_hello_name", { name: escapeHtml(firstName) })
+    : hour < 6 ? t("greet_night") : hour < 13 ? t("greet_morning") : hour < 21 ? t("greet_afternoon") : t("greet_night");
 
   root.innerHTML = h`
     <div class="hero">
@@ -1601,6 +1621,7 @@ async function renderHome() {
       <div id="destination-search"></div>
       <div class="hero-cta-row">
         <button class="hero-cta" id="fab-new-trip">${t("new_trip")}</button>
+        <button class="hero-quick-btn" id="btn-booking-search" title="Buscar en Booking.com">${icon("hotels")}</button>
         <button class="hero-quick-btn" id="btn-currency-converter" title="${t("currency_converter")}">${icon("wallet")}</button>
       </div>
       <div class="section-title-row">
@@ -1718,6 +1739,15 @@ async function renderHome() {
   root.querySelector("#fab-new-trip").addEventListener("click", () => openTripForm());
   root.querySelector("#btn-settings").addEventListener("click", () => openSettingsSheet());
   root.querySelector("#btn-ai-plan-trip").addEventListener("click", () => openAiNewTripSheet());
+  // Búsqueda en Booking.com — a diferencia del conversor de moneda, esta
+  // es gratis para todo el mundo, con o sin cuenta. Sin un viaje
+  // concreto (estamos en el inicio), usa lo que se haya escrito en el
+  // buscador de destino como ciudad, si hay algo.
+  root.querySelector("#btn-booking-search").addEventListener("click", () => {
+    const destination = searchEl.value.trim();
+    const url = destination ? bookingSearchUrl({ destination }) : "https://www.booking.com/";
+    window.open(url, "_blank", "noopener");
+  });
   root.querySelector("#btn-currency-converter").addEventListener("click", async () => {
     if (!(await hasProAccess())) {
       openRegisterInviteSheet("El conversor de moneda requiere tener una cuenta.");
@@ -2396,6 +2426,19 @@ function renderAuthForm() {
       <div class="modal-actions">
         <button class="btn btn-primary" id="auth-login">Iniciar sesión</button>
       </div>
+      <div class="auth-divider"><span>¿Cuenta nueva?</span></div>
+      <div class="field">
+        <label>${t("auth_firstname_label")}</label>
+        <input type="text" id="auth-firstname" autocomplete="given-name" />
+      </div>
+      <div class="field">
+        <label>${t("auth_lastname_label")}</label>
+        <input type="text" id="auth-lastname" autocomplete="family-name" />
+      </div>
+      <div class="field">
+        <label>${t("auth_birthdate_label")}</label>
+        <input type="date" id="auth-birthdate" autocomplete="bday" />
+      </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="auth-signup">Crear cuenta nueva</button>
       </div>
@@ -2408,11 +2451,15 @@ function renderAuthForm() {
   const errorEl = overlay.querySelector("#auth-error");
   const emailEl = overlay.querySelector("#auth-email");
   const passEl = overlay.querySelector("#auth-password");
+  const firstNameEl = overlay.querySelector("#auth-firstname");
+  const lastNameEl = overlay.querySelector("#auth-lastname");
+  const birthdateEl = overlay.querySelector("#auth-birthdate");
 
   overlay.querySelector("#auth-google").addEventListener("click", async (e) => {
     errorEl.textContent = "";
     const btn = e.currentTarget;
     btn.disabled = true;
+    const birthDate = birthdateEl.value || null;
     const { user, error, cancelled, redirecting } = await signInWithGoogle();
     if (redirecting) return; // la página está navegando a Google, no hay más que hacer aquí
     btn.disabled = false;
@@ -2420,6 +2467,9 @@ function renderAuthForm() {
     if (error) { errorEl.textContent = error; return; }
     overlay.remove();
     await afterLogin(user);
+    // El nombre ya viene de la cuenta de Google; solo falta la fecha
+    // de nacimiento, que Google no comparte, si la escribió.
+    if (birthDate) await saveBirthDate(birthDate);
   });
 
   overlay.querySelector("#auth-login").addEventListener("click", async () => {
@@ -2432,17 +2482,27 @@ function renderAuthForm() {
 
   overlay.querySelector("#auth-signup").addEventListener("click", async () => {
     errorEl.textContent = "";
-    const { user, error } = await signUp(emailEl.value.trim(), passEl.value);
+    const displayName = [firstNameEl.value.trim(), lastNameEl.value.trim()].filter(Boolean).join(" ");
+    const birthDate = birthdateEl.value || null;
+    const { user, error } = await signUp(emailEl.value.trim(), passEl.value, displayName || undefined);
     if (error) { errorEl.textContent = error; return; }
     overlay.remove();
     // Cuenta recién creada: subimos lo que ya haya en este dispositivo.
     toast("Cuenta creada, subiendo tus datos…");
     await pushToCloud();
+    if (birthDate) await saveBirthDate(birthDate);
     await renderApp();
   });
 }
 
 async function afterLogin(user) {
+  // A lo mejor esfuerzo: se guarda una copia local de la fecha de
+  // nacimiento (si la cuenta tiene una) para poder usarla más
+  // adelante (p. ej. felicitar el cumpleaños) sin depender de la red.
+  getBirthDate()
+    .then((birthDate) => birthDate && Data.settingSet("profile_birth_date", birthDate))
+    .catch(() => {});
+
   const hasBackup = await cloudHasBackup();
   if (!hasBackup) {
     toast("Sesión iniciada. Subiendo tus datos de este dispositivo…");
@@ -3052,6 +3112,66 @@ async function checkAndNotifyToday() {
 }
 
 // ============================================================
+// FELICITACIÓN DE CUMPLEAÑOS — usa la fecha de nacimiento guardada en
+// el perfil (ver saveBirthDate/profile_birth_date en cloud.js/afterLogin)
+// para saludar una vez al año, el día que toque, con una ventana
+// grande (no un simple toast, para que se note de verdad). A propósito
+// NO depende del permiso de notificaciones del navegador (mucha gente
+// no lo da): la ventana la ve todo el mundo con sesión iniciada; la
+// notificación del navegador es solo un extra para quien las activó.
+// ============================================================
+const BIRTHDAY_GREETED_KEY = "birthday_greeted_year";
+
+function openBirthdayCelebrationSheet(firstName) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay birthday-overlay";
+  overlay.innerHTML = h`
+    <div class="modal-sheet birthday-sheet">
+      <div class="birthday-hero">
+        <div class="birthday-confetti" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <img class="birthday-emoji" src="img/birthday-cake.webp" alt="" aria-hidden="true" />
+        <h2 class="birthday-title">¡Feliz cumpleaños${firstName ? `, ${escapeHtml(firstName)}` : ""}!</h2>
+        <p class="birthday-sub">Que este año te lleve a todos los destinos que sueñas.</p>
+      </div>
+      <div class="modal-actions" style="margin-top:18px;">
+        <button class="btn btn-primary" id="birthday-close">¡Gracias!</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
+  overlay.querySelector("#birthday-close").addEventListener("click", () => overlay.remove());
+}
+
+async function checkBirthday() {
+  try {
+    const user = currentUser();
+    if (!user) return; // solo tiene sentido con cuenta (es su fecha, no la del dispositivo)
+
+    const birthDate = await Data.settingGet("profile_birth_date");
+    if (!birthDate) return;
+    const [, month, day] = birthDate.split("-").map(Number);
+    if (!month || !day) return;
+
+    const now = new Date();
+    if (now.getMonth() + 1 !== month || now.getDate() !== day) return;
+
+    const alreadyGreeted = await Data.settingGet(BIRTHDAY_GREETED_KEY);
+    if (alreadyGreeted === now.getFullYear()) return;
+    await Data.settingSet(BIRTHDAY_GREETED_KEY, now.getFullYear());
+
+    const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : "";
+    openBirthdayCelebrationSheet(firstName);
+    if ("Notification" in window && Notification.permission === "granted" && (await Data.settingGet(NOTIF_KEY))) {
+      new Notification("Viajoo", { body: `🎉 ¡Feliz cumpleaños${firstName ? ", " + firstName : ""}!` });
+    }
+  } catch (err) {
+    // sin fecha guardada, sin sesión, o cualquier fallo: no pasa nada
+  }
+}
+
+// ============================================================
 // LEGAL — aviso legal (LSSI), privacidad y protección de datos,
 // términos de uso, propiedad intelectual, cookies, contacto y
 // reclamaciones, condiciones de suscripción, y licencias de
@@ -3093,7 +3213,7 @@ personal cuyo titular es:
 Titular: [NOMBRE Y APELLIDOS]
 DNI/NIF: [DNI/NIF]
 Domicilio: [DOMICILIO]
-Correo de contacto: [EMAIL DE CONTACTO]
+Correo de contacto: contacto@viajoo.es
 
 Por ahora Viajoo es una aplicación personal en fase de
 desarrollo y pruebas, sin actividad económica real todavía: la
@@ -3127,7 +3247,7 @@ const PRIVACY_POLICY_TEXT = `
 Responsable del tratamiento
 [NOMBRE Y APELLIDOS], con DNI/NIF [DNI/NIF] y domicilio en
 [DOMICILIO], es quien responde de los datos que trata esta aplicación.
-Puedes escribir a [EMAIL DE CONTACTO] para cualquier duda sobre esta
+Puedes escribir a contacto@viajoo.es para cualquier duda sobre esta
 política o para ejercer tus derechos.
 
 1. Qué datos guarda Viajoo
@@ -3223,7 +3343,7 @@ tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
 estos derechos tú mismo desde Ajustes → Copiar / restaurar datos
 (exportar o borrar) y Ajustes → Mi cuenta (eliminar la cuenta). Para lo
-que no puedas hacer directamente, escríbenos a [EMAIL DE CONTACTO]. Si
+que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
@@ -3240,7 +3360,7 @@ una cuenta o activar funciones que impliquen guardar datos en la nube.
 
 15. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
-[EMAIL DE CONTACTO].
+contacto@viajoo.es.
 `.trim();
 
 const TERMS_OF_USE_TEXT = `
@@ -3260,7 +3380,7 @@ una cuenta.
 3. Tu cuenta
 Crear una cuenta es opcional. Si lo haces, eres responsable de
 mantener segura tu contraseña y de la actividad que ocurra con tu
-cuenta. Avísanos en [EMAIL DE CONTACTO] si sospechas un uso no
+cuenta. Avísanos en contacto@viajoo.es si sospechas un uso no
 autorizado.
 
 4. Uso aceptable
@@ -3350,7 +3470,7 @@ servicio.
 
 6. Reclamaciones de propiedad intelectual
 Si crees que algo en la app infringe tus derechos de propiedad
-intelectual, escríbenos a [EMAIL DE CONTACTO] con el detalle para poder
+intelectual, escríbenos a contacto@viajoo.es con el detalle para poder
 revisarlo.
 `.trim();
 
@@ -3399,12 +3519,12 @@ const CONTACT_COMPLAINTS_TEXT = `
 
 1. Contacto
 Para cualquier duda, incidencia o solicitud sobre tus datos, escribe a
-[EMAIL DE CONTACTO].
+contacto@viajoo.es.
 
 2. Reclamaciones
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
-- Pedir la hoja de reclamaciones escribiendo a [EMAIL DE CONTACTO].
+- Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
 - Si eres consumidor de la Unión Europea y la reclamación es sobre una
   compra Pro (cuando exista cobro real), acudir a la plataforma
   europea de resolución de litigios en línea:
@@ -3516,6 +3636,7 @@ function openLegalSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-ip">${icon("edit")} Propiedad intelectual</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-cookies">${icon("settings")} Cookies y almacenamiento local</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact">${icon("bell")} Contacto y reclamaciones</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact-form">✉️ Enviar un mensaje</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-subscription">${icon("wallet")} Condiciones de suscripción Pro</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-licenses">${icon("link")} Licencias de terceros</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="lg-close">${t("common_close")}</button></div>
@@ -3534,8 +3655,78 @@ function openLegalSheet() {
   go("#lg-ip", "Propiedad intelectual", INTELLECTUAL_PROPERTY_TEXT);
   go("#lg-cookies", "Cookies y almacenamiento local", COOKIES_TEXT);
   go("#lg-contact", "Contacto y reclamaciones", CONTACT_COMPLAINTS_TEXT);
+  overlay.querySelector("#lg-contact-form").addEventListener("click", () => {
+    openSubSheet(overlay, openContactFormSheet);
+  });
   go("#lg-subscription", "Condiciones de suscripción Pro", SUBSCRIPTION_TERMS_TEXT);
   go("#lg-licenses", "Licencias de terceros", THIRD_PARTY_LICENSES_TEXT);
+}
+
+/**
+ * Formulario de contacto: manda el mensaje a contacto@viajoo.es a
+ * través de la Cloud Function "sendContactMessage" (ver
+ * js/contact.js). No hace falta tener cuenta para usarlo.
+ */
+function openContactFormSheet() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = h`
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h2 class="modal-title">✉️ Enviar un mensaje</h2>
+      <p style="color:var(--muted); font-size:13px; line-height:1.6; margin-top:-8px;">
+        ¿Dudas, un problema o algo que reclamar? Escríbenos y te
+        respondemos a tu email.
+      </p>
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="cf-name" autocomplete="name" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="cf-email" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Mensaje</label>
+        <textarea id="cf-message" rows="5"></textarea>
+      </div>
+      <input type="text" id="cf-website" name="website" autocomplete="off" tabindex="-1" style="position:absolute; left:-9999px;" aria-hidden="true" />
+      <p id="cf-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="cf-send">Enviar</button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="cf-close">Cerrar</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
+  overlay.querySelector("#cf-close").addEventListener("click", () => overlay.remove());
+
+  const nameEl = overlay.querySelector("#cf-name");
+  const emailEl = overlay.querySelector("#cf-email");
+  const messageEl = overlay.querySelector("#cf-message");
+  const websiteEl = overlay.querySelector("#cf-website");
+  const errorEl = overlay.querySelector("#cf-error");
+  const sendBtn = overlay.querySelector("#cf-send");
+
+  sendBtn.addEventListener("click", async () => {
+    errorEl.textContent = "";
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    const message = messageEl.value.trim();
+    if (!name || !email || !message) {
+      errorEl.textContent = "Rellena todos los campos.";
+      return;
+    }
+    sendBtn.disabled = true;
+    const { ok, error } = await sendContactMessage({ name, email, message, website: websiteEl.value });
+    sendBtn.disabled = false;
+    if (!ok) {
+      errorEl.textContent = error;
+      return;
+    }
+    overlay.remove();
+    toast("Mensaje enviado. Te responderemos a tu email.");
+  });
 }
 
 // ------------------------------------------------------------
@@ -3665,7 +3856,7 @@ async function openProfileSheet() {
   });
 }
 
-export { openSettingsSheet, loadTheme, checkAndNotifyToday, installPullToRefresh, afterLogin };
+export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin };
 
 // ============================================================
 // DESLIZAR PARA RECARGAR (pull-to-refresh)

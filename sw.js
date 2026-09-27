@@ -2,7 +2,7 @@
 // abra incluso sin conexión (los datos ya viven en IndexedDB,
 // que no depende del service worker).
 
-const CACHE_NAME = "viajoo-v37";
+const CACHE_NAME = "viajoo-v38";
 
 // Caché de teselas del mapa: va SEPARADA a propósito y con nombre
 // fijo (sin número de versión de la app), para que sobreviva a las
@@ -40,11 +40,14 @@ const APP_SHELL = [
   "./js/lock.js",
   "./js/onboarding.js",
   "./js/i18n.js",
+  "./js/contact.js",
+  "./js/contact-config.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
   "./img/bg-sky-light.webp",
   "./img/bg-sky-dark.webp",
+  "./img/birthday-cake.webp",
   "./img/wonders/machu-picchu.webp",
   "./img/wonders/chichen-itza.webp",
   "./img/wonders/christ-redeemer.webp",

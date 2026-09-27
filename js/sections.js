@@ -543,9 +543,34 @@ function openFlightForm(trip, flight) {
 // HOTELES
 // ============================================================
 
+/**
+ * Enlace de búsqueda a Booking.com para el destino y fechas del
+ * viaje. Por ahora es un enlace normal, sin comisión: para que sume
+ * ingresos de afiliado hace falta darse de alta en Booking Partner
+ * Hub y añadir aquí `&aid={ID_DE_AFILIADO}` con el ID que den — sin
+ * eso, el enlace funciona igual, solo que sin trackear la reserva a
+ * esta cuenta.
+ */
+function bookingSearchUrl(trip) {
+  const params = new URLSearchParams({ ss: trip.destination || "" });
+  if (trip.start_date) params.set("checkin", trip.start_date);
+  if (trip.end_date) params.set("checkout", trip.end_date);
+  return `https://www.booking.com/searchresults.html?${params.toString()}`;
+}
+
 async function renderHotels(trip) {
   const hotels = await Data.getAllByTrip("hotels", trip.id);
   hotels.sort((a, b) => (a.check_in || "").localeCompare(b.check_in || ""));
+
+  const bookingCta = h`
+    <button type="button" class="ai-plan-cta" id="booking-search-cta" style="margin-bottom:16px;">
+      <span class="ai-plan-cta-art">🏨</span>
+      <span class="ai-plan-cta-text">
+        <strong>Buscar en Booking.com</strong>
+        <span>Compara precios de hoteles en ${escapeHtml(trip.destination || "tu destino")}</span>
+      </span>
+      <span class="ai-plan-cta-arrow">${icon("chevron")}</span>
+    </button>`;
 
   const list = hotels.length
     ? hotels
@@ -573,9 +598,12 @@ async function renderHotels(trip) {
         .join("")
     : emptyState("🏨", t("empty_hotels"));
 
-  section(list);
+  section(bookingCta + list);
   setFab(fabBtn());
 
+  document.getElementById("booking-search-cta").addEventListener("click", () => {
+    window.open(bookingSearchUrl(trip), "_blank", "noopener");
+  });
   wireTicketActions("hotels", hotels, (hotel) => openHotelForm(trip, hotel), (hotel) => openMapsAppPicker({ type: "point", location: hotel.address }));
   document.getElementById("fab-add").addEventListener("click", () => openHotelForm(trip));
   fetchStubPhotos("hotels", hotels, "name", "hotel");
@@ -1363,7 +1391,7 @@ function openCurrencyConverterSheet(trip = null) {
 
   function updateSelectedLabel() {
     chipEls.forEach((btn) => btn.classList.toggle("is-selected", btn.dataset.code === selected.code));
-    selectedEl.textContent = `Convirtiendo desde: ${selected.label} (${selected.code})`;
+    selectedEl.textContent = `Convirtiendo desde: ${selected.code}`;
   }
 
   function selectCurrency(currency) {
@@ -2776,4 +2804,4 @@ async function exportTripToIcs(trip) {
   toast("Calendario descargado — ábrelo con tu app de calendario para añadirlo");
 }
 
-export { TABS, renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet };
+export { TABS, renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };
