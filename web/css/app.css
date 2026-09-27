@@ -43,6 +43,7 @@
 .tab:hover { background: var(--paper); }
 .tab[aria-selected="true"] { background: var(--ink); color: var(--card); }
 .tab[aria-selected="true"] .n { color: inherit; opacity: .7; }
+@media (min-width: 901px) { .tabs { flex-wrap: wrap; } .toolbar { flex-wrap: wrap; } }
 
 .section-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .section-bar h2 { font-size: 28px; font-stretch: 115%; }
@@ -85,7 +86,7 @@
 
 /* Checklist */
 .check-add { display: flex; gap: 8px; margin-bottom: 14px; }
-.check-add input { flex: 1; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 15px var(--f-body); }
+.check-add input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 15px var(--f-body); }
 .row.check label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .row.check input { width: 18px; height: 18px; accent-color: var(--c-checklist); }
 .row.check { grid-template-columns: minmax(0, 1fr) auto; }
@@ -93,6 +94,7 @@
 /* ---------- Modal ---------- */
 .modal-back { position: fixed; inset: 0; z-index: 60; background: rgba(8, 11, 32, .55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; animation: fade .18s ease; }
 .modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--card); border-radius: 28px; padding: 28px; box-shadow: 0 40px 100px -30px rgba(0, 0, 0, .6); animation: pop .22s cubic-bezier(.2, .8, .2, 1); }
+.modal:focus { outline: none; }
 .modal h2 { font-size: 26px; font-stretch: 115%; margin-bottom: 20px; }
 .modal .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
 .modal .full { grid-column: 1 / -1; }
@@ -110,12 +112,13 @@
 @keyframes pop { from { opacity: 0; transform: translateY(16px) scale(.98); } }
 
 /* ---------- Avisos ---------- */
-.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 80; background: var(--ink); color: var(--card); padding: 12px 18px; border-radius: 12px; font-size: 14.5px; box-shadow: var(--shadow); animation: pop .2s ease; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 80; background: var(--ink); color: var(--card); padding: 12px 18px; border-radius: 12px; font-size: 14.5px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); pointer-events: none; animation: pop .2s ease; }
 
 /* ---------- Acceso ---------- */
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--paper); border-radius: 12px; margin-bottom: 20px; }
 .auth-tabs button { border: 0; background: none; padding: 10px; border-radius: 9px; font: 600 14px var(--f-body); color: var(--ink-2); cursor: pointer; }
 .auth-tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.auth-notice { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: var(--brand-soft); color: var(--ink); font-size: 14px; line-height: 1.45; }
 
 /* ---------- Calendario ---------- */
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -129,10 +132,12 @@
 .cal-ev b { font-family: var(--f-mono); font-weight: 600; }
 .cal .more { font-size: 11px; color: var(--muted); padding-left: 4px; }
 .cal-agenda { margin-top: 28px; }
+.rows .row.flash { background: var(--brand-soft); border-radius: 12px; transition: background .3s ease; }
 @media (max-width: 760px) {
   .cal { gap: 3px; }
   .cal-cell { min-height: 54px; padding: 4px; border-radius: 10px; }
-  .cal-ev { font-size: 0; padding: 0; height: 6px; border: 0; background: var(--accent); }
+  .cal-ev { font-size: 0; padding: 0; height: 6px; border: 0; background: var(--accent); pointer-events: none; }
+  .cal-cell:has(.cal-ev) { cursor: pointer; }
   .cal-ev b { display: none; }
   .cal .more { display: none; }
   .cal-dow { padding: 4px 2px; font-size: 9.5px; letter-spacing: .04em; }
@@ -366,7 +371,7 @@
 .shr-refresh-all b, .shr-refresh-all span { display: block; }
 
 /* ---------- Ajustes (features/settings.js) ---------- */
-.stg-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; margin: -2px 0 18px; }
+.stg-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 4px; margin: -2px 0 18px; }
 .stg-tabs::-webkit-scrollbar { display: none; }
 .stg-tabs .chip-btn { flex: 0 0 auto; }
 .stg-panel { min-height: 280px; }
@@ -429,3 +434,6 @@
   .stg-item-solo .btn, .stg-list .stg-item .btn { margin-left: auto; }
   .shr-code { font-size: 22px; letter-spacing: .22em; }
 }
+.tool.pulse { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 25%, transparent); animation: tool-pulse 1s ease 3; }
+@keyframes tool-pulse { 50% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .tool.pulse { animation: none; } }

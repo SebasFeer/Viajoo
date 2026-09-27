@@ -70,7 +70,7 @@ export async function openShare(trip, ctx) {
   }
 
   const wasShared = !!trip.share_code;
-  toast("Generando enlace…");
+  toast("Generando código…");
   const res = await shareTrip(trip.id);
   if (!res.ok) {
     toast(res.error || "No se pudo compartir el viaje");

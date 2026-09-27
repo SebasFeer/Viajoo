@@ -204,7 +204,9 @@ async function openExpenseForm(trip, ctx, prefill) {
       values.split_with = [];
     }
     close();
-    await ctx.saveItem("expenses", null, values, "Gasto guardado");
+    await ctx.saveItem("expenses", null, values, "Gasto guardado en Gastos");
+    // Se lleva a Gastos para que se vea el gasto recién apuntado.
+    if (ctx.state.view === "trip" && ctx.state.tripId === trip.id && ctx.state.tab !== "expenses") ctx.go("trip", trip.id, "expenses");
   });
   setTimeout(() => f("description")?.focus(), 50);
 }

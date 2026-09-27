@@ -91,7 +91,47 @@ function toast(msg) {
   el.setAttribute("role", "status");
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
+  setTimeout(() => el.remove(), Math.max(2600, String(msg).length * 55));
+}
+
+// Teclado en las ventanas: Escape cierra solo la de más arriba, el
+// foco entra en la ventana, Tab no se escapa de ella y, al cerrar,
+// vuelve a donde estaba. Devuelve la función que quita los oyentes.
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+function modalKeys(back, close, focusEl) {
+  const prev = document.activeElement;
+  const onKey = (e) => {
+    if (!back.isConnected) return cleanup();
+    const top = [...document.querySelectorAll(".modal-back")].pop();
+    if (top !== back) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "Tab") {
+      const list = [...back.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      if (!list.length) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (!back.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  function cleanup() {
+    document.removeEventListener("keydown", onKey);
+    if (prev && prev.isConnected && !document.querySelector(".modal-back")) prev.focus?.();
+  }
+  document.addEventListener("keydown", onKey);
+  const target = focusEl || back.querySelector(FOCUSABLE);
+  target?.focus();
+  return cleanup;
 }
 
 // Confirmación dentro de la página (sin confirm() del navegador).
@@ -108,14 +148,18 @@ function confirmBox(text, okLabel = "Eliminar") {
           <button class="btn btn-primary" data-yes type="button" style="background:var(--danger)">${esc(okLabel)}</button>
         </div></div>
       </div>`;
+    let unkeys = () => {};
     const close = (v) => {
+      if (!back.isConnected) return;
       back.remove();
+      unkeys();
       resolve(v);
     };
     back.addEventListener("click", (e) => e.target === back && close(false));
     $("[data-no]", back).addEventListener("click", () => close(false));
     $("[data-yes]", back).addEventListener("click", () => close(true));
     document.body.appendChild(back);
+    unkeys = modalKeys(back, () => close(false), $("[data-no]", back));
   });
 }
 
@@ -128,22 +172,22 @@ function openSheet({ title, html = "", wide = false, onMount, onClose }) {
   const back = document.createElement("div");
   back.className = "modal-back";
   back.innerHTML = `
-    <div class="modal sheet ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="modal sheet ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
       <div class="sheet-head"><h2>${esc(title)}</h2><button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button></div>
       <div class="sheet-body">${html}</div>
     </div>`;
+  let unkeys = () => {};
   const close = () => {
     if (!back.isConnected) return;
     back.remove();
-    document.removeEventListener("keydown", onKey);
+    unkeys();
     onClose?.();
   };
-  const onKey = (e) => e.key === "Escape" && close();
-  document.addEventListener("keydown", onKey);
   back.addEventListener("click", (e) => e.target === back && close());
   $("[data-close]", back).addEventListener("click", close);
   document.body.appendChild(back);
   const root = $(".sheet-body", back);
+  unkeys = modalKeys(back, close, $(".modal", back));
   onMount?.(root, close);
   return { root, close };
 }
@@ -283,7 +327,11 @@ function openForm({ title, fields, initial = {}, onSave, onDelete, validate, del
         </div>
       </div>
     </form>`;
-  const close = () => back.remove();
+  let unkeys = () => {};
+  const close = () => {
+    back.remove();
+    unkeys();
+  };
   back.addEventListener("click", (e) => e.target === back && close());
   $("[data-cancel]", back).addEventListener("click", close);
   if (onDelete)
@@ -306,7 +354,7 @@ function openForm({ title, fields, initial = {}, onSave, onDelete, validate, del
     await onSave(values);
   });
   document.body.appendChild(back);
-  $("input, select, textarea", back)?.focus();
+  unkeys = modalKeys(back, close, $("input, select, textarea", back));
 }
 
 // ------------------------------------------------------------
@@ -344,7 +392,9 @@ function openItemForm(store, item, prefill) {
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function openTripForm(trip) {
+// thenFeature: función de la portada (#usar-…) que se abre en cuanto
+// se crea el viaje.
+function openTripForm(trip, thenFeature) {
   openForm({
     title: trip ? "Editar viaje" : "Nuevo viaje",
     fields: FORMS.trips.fields,
@@ -369,6 +419,7 @@ function openTripForm(trip) {
         const id = await Data.add("trips", values);
         await Data.addDefaultChecklistItems(id);
         toast("Viaje creado");
+        if (thenFeature) pendingFeature = thenFeature;
         go("trip", id);
       }
     },
@@ -413,7 +464,28 @@ function go(view, tripId, tab) {
   else location.hash = `viaje-${tripId}${tab && tab !== "overview" ? `/${tab}` : ""}`;
 }
 
+// Enlaces de la portada: mis-viajes.html#usar-<función> abre esa función
+// (tras iniciar sesión si hace falta) en el viaje más próximo.
+let pendingFeature = null;
+const FEATURE_LINKS = {
+  flights: { tab: "flights", label: "Vuelos, hoteles y reservas" },
+  itinerary: { tab: "itinerary", label: "Itinerario por días" },
+  map: { tab: "map", label: "Mapa y rutas" },
+  calendar: { tab: "calendar", label: "Calendario" },
+  expenses: { tab: "expenses", label: "Gastos compartidos" },
+  checklist: { tab: "checklist", label: "Checklist" },
+  "flight-status": { tab: "flights", label: "Estado de vuelo", flightStatus: true },
+  copilot: { tool: "copilot", label: "Copiloto IA" },
+  share: { tool: "share", label: "Viajes compartidos" },
+  discover: { tool: "discover", label: "Descubrir cerca" },
+  currency: { tool: "currency", label: "Divisas" },
+  export: { highlight: ["pdf", "ics"], label: "PDF y calendario", hint: "Exporta el itinerario en PDF o añádelo a tu calendario desde estos botones." },
+  backup: { settings: "data", label: "Copia de seguridad" },
+};
+
 function readHash() {
+  const f = location.hash.match(/^#usar-([\w-]+)$/);
+  if (f && FEATURE_LINKS[f[1]]) pendingFeature = f[1];
   const m = location.hash.match(/^#viaje-(\d+)(?:\/(\w+))?$/);
   if (m) {
     state.view = "trip";
@@ -427,8 +499,14 @@ function readHash() {
 window.addEventListener("hashchange", () => {
   const prev = `${state.view}:${state.tripId}`;
   readHash();
+  if (!state.user) {
+    // Sin sesión: #crear-cuenta cambia a "Crear cuenta"; #usar-… avisa.
+    if ($("#login-form")) renderLogin();
+    return;
+  }
   render().then(() => {
     if (`${state.view}:${state.tripId}` !== prev) window.scrollTo(0, 0);
+    if (pendingFeature) openPendingFeature();
   });
 });
 
@@ -484,12 +562,25 @@ function headerUser() {
         <button type="button" data-act="logout" class="danger" role="menuitem">Cerrar sesión</button>
       </div>
     </div>`;
-  $("#avatar").addEventListener("click", (e) => {
+  const avatar = $("#avatar");
+  const setMenu = (open) => {
+    $("#menu").hidden = !open;
+    avatar.setAttribute("aria-expanded", String(open));
+  };
+  avatar.addEventListener("click", (e) => {
     e.stopPropagation();
-    $("#menu").hidden = !$("#menu").hidden;
+    setMenu($("#menu").hidden);
+  });
+  $(".user-menu").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("#menu").hidden) {
+      setMenu(false);
+      avatar.focus();
+    }
   });
   $("#menu").addEventListener("click", async (e) => {
     const act = e.target.closest("[data-act]")?.dataset.act;
+    // El menú se cierra: el foco vuelve al avatar (y a él regresa al cerrar la ventana).
+    if (act) avatar.focus();
     if (act === "logout") {
       await signOutUser();
       toast("Sesión cerrada");
@@ -507,6 +598,7 @@ function headerUser() {
 document.addEventListener("click", () => {
   const m = $("#menu");
   if (m) m.hidden = true;
+  $("#avatar")?.setAttribute("aria-expanded", "false");
 });
 
 // --- Lista de viajes -------------------------------------------------
@@ -657,11 +749,23 @@ function sectionBar(title, store, addLabel) {
   return `<div class="section-bar"><h2>${title}</h2>${store ? `<button class="btn btn-primary btn-sm" type="button" data-add="${store}">+ ${addLabel}</button>` : ""}</div>`;
 }
 
+// Las filas se abren con clic y también con Intro o Espacio (tienen tabindex).
+function onRowOpen(row, open) {
+  row.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    open();
+  });
+  row.addEventListener("keydown", (e) => {
+    if (e.target !== row || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    open();
+  });
+}
+
 function wireRows(body, store, items) {
   body.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => openItemForm(b.dataset.add)));
   body.querySelectorAll("[data-id]").forEach((row) =>
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return;
+    onRowOpen(row, () => {
       const item = items.find((i) => String(i.id) === row.dataset.id);
       if (item) openItemForm(store, item);
     })
@@ -956,7 +1060,7 @@ function renderExpenses(body, trip, L) {
   $("[data-add-expense]", body).addEventListener("click", () => openExpenseForm(trip, null, companions));
   $("[data-companions]", body).addEventListener("click", () => openCompanions(trip, companions));
   body.querySelectorAll("[data-id]").forEach((row) =>
-    row.addEventListener("click", () => {
+    onRowOpen(row, () => {
       const item = items.find((i) => String(i.id) === row.dataset.id);
       if (item) openExpenseForm(trip, item, companions);
     })
@@ -1005,7 +1109,11 @@ function openExpenseForm(trip, e, companions) {
         <div class="right"><button class="btn btn-secondary" type="button" data-cancel>Cancelar</button><button class="btn btn-primary" type="submit">Guardar</button></div>
       </div>
     </form>`;
-  const close = () => back.remove();
+  let unkeys = () => {};
+  const close = () => {
+    back.remove();
+    unkeys();
+  };
   back.addEventListener("click", (ev) => ev.target === back && close());
   $("[data-cancel]", back).addEventListener("click", close);
   if (e)
@@ -1035,7 +1143,7 @@ function openExpenseForm(trip, e, companions) {
     render();
   });
   document.body.appendChild(back);
-  $("#exp-description", back).focus();
+  unkeys = modalKeys(back, close, $("#exp-description", back));
 }
 
 function openCompanions(trip, companions) {
@@ -1055,10 +1163,7 @@ function openCompanions(trip, companions) {
         }</div>
         <div class="foot"><div class="right"><button class="btn btn-secondary" type="button" data-close>Listo</button></div></div>
       </div>`;
-    $("[data-close]", back).addEventListener("click", () => {
-      back.remove();
-      render();
-    });
+    $("[data-close]", back).addEventListener("click", close);
     $("[data-add-form]", back).addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const name = $("#comp-name", back).value.trim();
@@ -1076,14 +1181,16 @@ function openCompanions(trip, companions) {
       })
     );
   };
-  back.addEventListener("click", (ev) => {
-    if (ev.target === back) {
-      back.remove();
-      render();
-    }
-  });
+  let unkeys = () => {};
+  function close() {
+    back.remove();
+    unkeys();
+    render();
+  }
+  back.addEventListener("click", (ev) => ev.target === back && close());
   paint(companions);
   document.body.appendChild(back);
+  unkeys = modalKeys(back, close, $("#comp-name", back));
 }
 
 // --- Checklist -------------------------------------------------------
@@ -1091,13 +1198,13 @@ function renderChecklist(body, trip, L) {
   const items = [...L.checklist].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const done = items.filter((c) => c.completed).length;
   body.innerHTML = `
-    ${sectionBar(`Checklist <span class="muted mono" style="font-size:16px">${done}/${items.length}</span>`, null)}
+    <div class="section-bar"><h2>Checklist <span class="muted mono" style="font-size:16px">${done}/${items.length}</span></h2><button class="btn btn-secondary btn-sm" type="button" data-basics>+ Cargar lista básica</button></div>
     <form class="check-add" data-add-task><input id="task-input" placeholder="Añadir tarea, p. ej. Adaptador de enchufe" autocomplete="off" /><button class="btn btn-primary" type="submit">Añadir</button></form>
     ${
       items.length
         ? `<div class="rows">${items
             .map(
-              (c) => `<div class="row check ${c.completed ? "done" : ""}"><label><input type="checkbox" data-toggle="${c.id}" ${c.completed ? "checked" : ""} /><span class="t">${esc(c.task)}</span></label><button class="icon-btn" type="button" data-del-task="${c.id}" title="Eliminar">✕</button></div>`
+              (c) => `<div class="row check ${c.completed ? "done" : ""}"><label><input type="checkbox" data-toggle="${c.id}" ${c.completed ? "checked" : ""} /><span class="t">${esc(c.task)}</span></label><span class="actions-inline"><button class="icon-btn" type="button" data-edit-task="${c.id}" title="Editar" aria-label="Editar tarea">✎</button><button class="icon-btn" type="button" data-del-task="${c.id}" title="Eliminar" aria-label="Eliminar tarea">✕</button></span></div>`
             )
             .join("")}</div>`
         : `<div class="empty-inline">La lista está vacía.</div>`
@@ -1116,6 +1223,23 @@ function renderChecklist(body, trip, L) {
       const item = items.find((i) => String(i.id) === cb.dataset.toggle);
       await Data.put("checklist", { ...item, completed: cb.checked ? 1 : 0 });
       render();
+    })
+  );
+  $("[data-basics]", body).addEventListener("click", async () => {
+    await Data.addDefaultChecklistItems(trip.id);
+    toast("Lista básica cargada");
+    render();
+  });
+  body.querySelectorAll("[data-edit-task]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const item = items.find((i) => String(i.id) === b.dataset.editTask);
+      openForm({
+        title: "Editar tarea",
+        fields: [{ name: "task", label: "Tarea", required: true, full: true }],
+        initial: item,
+        onSave: (values) => saveItem("checklist", item, values, "Tarea guardada"),
+        onDelete: () => deleteItem("checklist", item.id, "Tarea eliminada"),
+      });
     })
   );
   body.querySelectorAll("[data-del-task]").forEach((b) =>
@@ -1195,7 +1319,7 @@ function renderCalendar(body, trip, L) {
       <span class="label">Agenda del mes · ${agenda.length}</span>
       <div class="rows" style="margin-top:10px">${
         agenda.length
-          ? agenda.map((e) => `<div class="row clickable" data-go="${e.tab}"><div class="when">${e.time ? `<b>${esc(e.time)}</b>` : ""}${esc(pretty(e.date))}</div><div class="t">${esc(e.text)}</div><div></div></div>`).join("")
+          ? agenda.map((e) => `<div class="row clickable" data-go="${e.tab}" data-day="${e.date}" tabindex="0"><div class="when">${e.time ? `<b>${esc(e.time)}</b>` : ""}${esc(pretty(e.date))}</div><div class="t">${esc(e.text)}</div><div></div></div>`).join("")
           : `<p class="muted small" style="padding:14px 0">Sin planes este mes.</p>`
       }</div>
     </div>`;
@@ -1211,7 +1335,26 @@ function renderCalendar(body, trip, L) {
       renderCalendar(body, trip, L);
     })
   );
-  body.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => go("trip", trip.id, el.dataset.go)));
+  body.querySelectorAll(".cal-ev[data-go]").forEach((el) =>
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      go("trip", trip.id, el.dataset.go);
+    })
+  );
+  body.querySelectorAll(".cal-agenda [data-go]").forEach((el) => onRowOpen(el, () => go("trip", trip.id, el.dataset.go)));
+  // Pulsar un día (en el móvil los planes se ven como barras) lleva a sus
+  // planes en la agenda de abajo.
+  body.querySelectorAll(".cal-cell[data-date]").forEach((cell) =>
+    cell.addEventListener("click", () => {
+      const rows = body.querySelectorAll(`.cal-agenda [data-day="${cell.dataset.date}"]`);
+      if (!rows.length) return;
+      rows[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      rows.forEach((r) => {
+        r.classList.add("flash");
+        setTimeout(() => r.classList.remove("flash"), 1600);
+      });
+    })
+  );
 }
 
 // --- Mapa (Leaflet + OpenStreetMap, como la app) ---------------------
@@ -1268,13 +1411,16 @@ async function renderMap(body, trip, L) {
   }
   const dates = [...new Set(pins.map((p) => p.date).filter(Boolean))].sort();
   if (mapDay !== "all" && !dates.includes(mapDay)) mapDay = "all";
+  const visible = mapDay === "all" ? pins : pins.filter((p) => p.date === mapDay);
+  // Ordenar por cercanía solo cambia algo con 3 paradas o más (igual que la app).
+  const canOptimize = mapDay !== "all" && visible.length >= 3;
 
   body.innerHTML = `
     <div class="section-bar"><h2>Mapa</h2><span class="muted small" id="map-status">Localizando lugares…</span></div>
     <div class="chips-row">
       <button type="button" class="chip-btn" data-day="all" aria-pressed="${mapDay === "all"}">Todos los días</button>
       ${dates.map((d) => `<button type="button" class="chip-btn" data-day="${d}" aria-pressed="${mapDay === d}">${esc(pretty(d))}</button>`).join("")}
-      ${mapDay !== "all" ? `<button type="button" class="chip-btn" data-optimize aria-pressed="${mapOptimize}">🧭 Ordenar por cercanía</button>` : ""}
+      ${canOptimize ? `<button type="button" class="chip-btn" data-optimize aria-pressed="${mapOptimize}">🧭 Ordenar por cercanía</button>` : ""}
     </div>
     <div class="map-layout">
       <div id="leaflet-map" class="map-box"></div>
@@ -1292,7 +1438,6 @@ async function renderMap(body, trip, L) {
     renderMap(body, trip, L);
   });
 
-  const visible = mapDay === "all" ? pins : pins.filter((p) => p.date === mapDay);
   const [Lf, located] = await Promise.all([loadLeaflet().catch(() => null), geocodeAll(visible, (p) => p.text)]);
   const status = $("#map-status", body);
   if (!status || !document.contains(status)) return; // cambió de pestaña mientras tanto
@@ -1310,21 +1455,35 @@ async function renderMap(body, trip, L) {
   }
   $("#map-list", body).innerHTML = ordered
     .map(
-      (p, i) => `<div class="row"><div class="when"><b>${i + 1}</b>${esc(p.time || "")}</div><div><div class="t">${esc(p.title)}</div><div class="s">${esc(KIND_LABEL[p.kind])} · ${esc(p.text)}</div></div><div class="r">${mapLink(p.text)}</div></div>`
+      (p, i) => `<div class="row clickable" data-pin="${i}" tabindex="0"><div class="when"><b>${i + 1}</b>${esc(p.time || "")}${mapDay === "all" && p.date ? `<br />${esc(pretty(p.date).replace(/ \d{4}$/, ""))}` : ""}</div><div><div class="t">${esc(p.title)}</div><div class="s">${esc(KIND_LABEL[p.kind])} · ${esc(p.text)}</div></div><div class="r">${mapLink(p.text)}</div></div>`
     )
     .join("");
   if (!Lf) {
     $("#leaflet-map", body).innerHTML = `<div class="empty-inline" style="margin:24px">No se pudo cargar el mapa (revisa tu conexión). La lista sigue disponible.</div>`;
     status.textContent = `${located.length} de ${visible.length} lugares localizados`;
+    body.querySelectorAll("[data-pin]").forEach((r) => {
+      r.classList.remove("clickable");
+      r.removeAttribute("tabindex");
+    });
     return;
   }
   const map = Lf.map($("#leaflet-map", body), { scrollWheelZoom: false });
   leafletMap = map;
   Lf.tileLayer("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
-  ordered.forEach((p, i) => {
+  const markers = ordered.map((p, i) => {
     const icon = Lf.divIcon({ html: `<div class="map-marker" style="--accent:var(${KIND_COLOR[p.kind]})"><span>${i + 1}</span></div>`, className: "", iconSize: [30, 30], iconAnchor: [15, 28] });
-    Lf.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(`<strong>${esc(p.title)}</strong><br>${esc(p.time || "")} · ${esc(pretty(p.date))}`);
+    return Lf.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(`<strong>${esc(p.title)}</strong><br>${esc(p.time || "")} · ${esc(pretty(p.date))}`);
   });
+  // Pulsar un lugar de la lista lo centra en el mapa y abre su ficha.
+  body.querySelectorAll("[data-pin]").forEach((row) =>
+    onRowOpen(row, () => {
+      const m = markers[Number(row.dataset.pin)];
+      if (!m) return;
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15));
+      m.openPopup();
+      $("#leaflet-map", body).scrollIntoView({ behavior: "smooth", block: "nearest" });
+    })
+  );
   map.fitBounds(Lf.latLngBounds(ordered.map((p) => [p.lat, p.lng])).pad(0.25));
 
   if (mapDay !== "all" && ordered.length >= 2) {
@@ -1376,6 +1535,7 @@ function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "logi
           <button type="button" role="tab" data-mode="login" aria-selected="${mode === "login"}">Iniciar sesión</button>
           <button type="button" role="tab" data-mode="signup" aria-selected="${mode === "signup"}">Crear cuenta</button>
         </div>
+        ${pendingFeature ? `<p class="auth-notice" role="status">Inicia sesión para usar <b>${esc(FEATURE_LINKS[pendingFeature].label)}</b>. Se abrirá en cuanto entres.</p>` : ""}
         <button class="btn btn-secondary btn-block" id="btn-google" type="button">
           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
           Continuar con Google
@@ -1419,6 +1579,57 @@ function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "logi
   });
 }
 
+function pickTrip(trips) {
+  const byStart = [...trips].sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
+  return (
+    byStart.find((t) => tripStatus(t) === "ongoing") ||
+    byStart.find((t) => tripStatus(t) === "upcoming") ||
+    byStart[byStart.length - 1]
+  );
+}
+
+async function openPendingFeature() {
+  const key = pendingFeature;
+  pendingFeature = null;
+  const cfg = key && FEATURE_LINKS[key];
+  if (!cfg || !state.user) return;
+  if (cfg.settings) {
+    history.replaceState(null, "", location.pathname);
+    (await feature("settings"))?.openSettings(featureCtx(), { tab: cfg.settings });
+    return;
+  }
+  const trip = pickTrip(await Data.getAll("trips"));
+  if (!trip) {
+    history.replaceState(null, "", location.pathname);
+    await render();
+    if (key === "copilot") {
+      (await feature("copilot"))?.openNewTripAI(featureCtx());
+      return;
+    }
+    toast(`Crea tu primer viaje para usar «${cfg.label}»`);
+    openTripForm(null, key);
+    return;
+  }
+  history.replaceState(null, "", `#viaje-${trip.id}/${cfg.tab || "overview"}`);
+  readHash();
+  await render();
+  window.scrollTo(0, 0);
+  if (cfg.tool) $(`[data-tool="${cfg.tool}"]`, app)?.click();
+  if (cfg.flightStatus) {
+    // Abre el estado del primer vuelo con número; si no hay, explica qué falta.
+    const btn = $("[data-status]", app);
+    if (btn) btn.click();
+    else toast("Añade un vuelo con su número (p. ej. IB 3100) para consultar su estado.");
+  }
+  if (cfg.highlight)
+    cfg.highlight.forEach((t) => {
+      const b = $(`[data-tool="${t}"]`, app);
+      b?.classList.add("pulse");
+      setTimeout(() => b?.classList.remove("pulse"), 4000);
+    });
+  if (cfg.hint) toast(cfg.hint);
+}
+
 function showLoading() {
   app.innerHTML = `<div class="loading"><div class="spinner"></div><span class="label">Cargando tus viajes</span></div>`;
 }
@@ -1456,6 +1667,7 @@ async function start() {
     }
     firstState = false;
     await render();
+    await openPendingFeature();
   });
 
   // Sin conexión con Firebase: onAuthChange nunca llega a llamarse.

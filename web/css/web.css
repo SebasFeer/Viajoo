@@ -525,3 +525,8 @@ a.pass:hover { transform: translateY(-2px); }
 .web-note { text-align: center; margin-top: 14px; }
 @media (max-width: 960px) { .web-feats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .web-feats { grid-template-columns: 1fr 1fr; gap: 10px; } .web-feat { padding: 16px; border-radius: 18px; } }
+a.web-feat, a.pro-card { display: block; color: inherit; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; }
+a.web-feat:hover, a.pro-card:hover { transform: translateY(-3px); }
+a.web-feat:hover { box-shadow: 0 1px 0 rgba(13,18,48,.04), 0 22px 44px -16px rgba(13,18,48,.3); }
+a.web-feat:focus-visible, a.pro-card:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+.web-feat .go { display: inline-flex; gap: 6px; margin-top: 14px; font: 600 13px var(--f-body); color: var(--brand); }

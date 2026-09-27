@@ -63,7 +63,11 @@ function miniSheet(title, html, onMount) {
       <div class="sheet-head"><h2>${escapeHtml(title)}</h2><button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button></div>
       <div class="sheet-body">${html}</div>
     </div>`;
-  const onKey = (e) => e.key === "Escape" && close();
+  const onKey = (e) => {
+    if (e.key !== "Escape" || [...document.querySelectorAll(".modal-back")].pop() !== back) return;
+    e.preventDefault();
+    close();
+  };
   function close() {
     if (!back.isConnected) return;
     back.remove();
@@ -74,6 +78,7 @@ function miniSheet(title, html, onMount) {
   back.querySelector("[data-close]").addEventListener("click", close);
   document.body.appendChild(back);
   onMount?.(back.querySelector(".sheet-body"), close);
+  back.querySelector(".pl-actions .btn-primary")?.focus();
   return close;
 }
 
