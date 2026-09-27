@@ -1553,6 +1553,7 @@ function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "logi
         <form id="login-form" novalidate>
           <label class="field"><span class="label">Email</span><input id="login-email" type="email" autocomplete="email" required /></label>
           <label class="field"><span class="label">Contraseña</span><input id="login-password" type="password" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
+          ${mode === "login" ? `<button type="button" class="link-btn forgot" id="btn-forgot">¿Olvidaste tu contraseña?</button>` : ""}
           <p class="form-error" id="login-error" role="alert"></p>
           <button class="btn btn-primary btn-block" type="submit" id="btn-login">${mode === "signup" ? "Crear cuenta" : "Entrar"} <span class="arrow">→</span></button>
         </form>
@@ -1562,6 +1563,8 @@ function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "logi
 
   app.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => renderLogin(b.dataset.mode === "signup" ? "signup" : "login")));
   const err = $("#login-error");
+  const openReset = async () => (await feature("password-reset"))?.openPasswordReset(featureCtx(), $("#login-email")?.value.trim() || "");
+  $("#btn-forgot")?.addEventListener("click", openReset);
   $("#btn-google").addEventListener("click", async () => {
     err.textContent = "";
     justLoggedIn = true;
@@ -1584,6 +1587,13 @@ function renderLogin(mode = location.hash === "#crear-cuenta" ? "signup" : "logi
     if (res.error) {
       justLoggedIn = false;
       err.textContent = res.error;
+      // Firebase responde lo mismo si la contraseña está mal, si el email
+      // no tiene cuenta o si la cuenta se creó con Google (no tiene
+      // contraseña): se explican las salidas posibles.
+      if (mode === "login" && /incorrect/i.test(res.error)) {
+        err.innerHTML = `${esc(res.error)} Si creaste la cuenta con Google, usa «Continuar con Google». Si no recuerdas la contraseña, <button type="button" class="link-btn" data-reset>recupérala aquí</button>.`;
+        $("[data-reset]", err).addEventListener("click", openReset);
+      }
     }
   });
 }

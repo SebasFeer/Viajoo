@@ -445,3 +445,9 @@
 .booking-cta strong { display: block; }
 .booking-cta small { color: var(--ink-2); }
 .booking-cta .arrow { margin-left: auto; color: var(--brand); }
+
+/* ---------- Recuperar contraseña ---------- */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--brand); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn.forgot { display: block; margin: -4px 0 12px auto; font-size: 13px; font-weight: 600; text-decoration: none; }
+.link-btn.forgot:hover { text-decoration: underline; }
+.pwr-done p { margin: 0 0 10px; }
