@@ -242,6 +242,268 @@ function dayPreviewHtml(day, i) {
     </div>`;
 }
 
+// ------------------------------------------------------------
+// COMPARTIR EL PLAN GENERADO — PDF con diseño propio (una sola
+// tinta de marca, pensado como "propuesta de viaje" más que como
+// el listado exhaustivo de exportItineraryPdf) y envío directo por
+// WhatsApp. No usa emoji dentro del PDF: las fuentes estándar de
+// jsPDF no las dibujan bien (salen como recuadros vacíos).
+// ------------------------------------------------------------
+const AI_PDF_COLORS = {
+  brand: [108, 92, 231],
+  dark: [30, 28, 46],
+  muted: [130, 130, 148],
+};
+
+function buildAiPlanPdfDoc(tripInfo, result) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 44;
+  const contentW = pageW - margin * 2;
+  let y = margin;
+
+  function ensureSpace(h) {
+    if (y + h > pageH - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  }
+
+  function sectionTitle(text) {
+    ensureSpace(30);
+    doc.setFillColor(...AI_PDF_COLORS.brand);
+    doc.rect(margin, y - 10, 3, 15, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...AI_PDF_COLORS.dark);
+    doc.text(text, margin + 10, y);
+    y += 20;
+  }
+
+  function bodyText(text, { size = 10.5, italic = false, color = AI_PDF_COLORS.dark } = {}) {
+    ensureSpace(16);
+    doc.setFont("helvetica", italic ? "italic" : "normal");
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+    const lines = doc.splitTextToSize(text, contentW);
+    doc.text(lines, margin, y);
+    y += lines.length * (size * 1.25) + 4;
+    doc.setTextColor(...AI_PDF_COLORS.dark);
+  }
+
+  // ---- Portada ----
+  const destination = tripInfo.destination || tripInfo.name || "Tu viaje";
+  const coverH = 130;
+  doc.setFillColor(...AI_PDF_COLORS.brand);
+  doc.rect(0, 0, pageW, coverH, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  const titleLines = doc.splitTextToSize(`Plan de viaje: ${destination}`, contentW);
+  doc.text(titleLines, margin, 52);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+  let coverY = 52 + titleLines.length * 22;
+  const dateRange =
+    tripInfo.start_date && tripInfo.end_date
+      ? `${formatDatePretty(tripInfo.start_date)} → ${formatDatePretty(tripInfo.end_date)}`
+      : "";
+  if (dateRange) {
+    doc.text(dateRange, margin, coverY);
+    coverY += 18;
+  }
+  doc.setFontSize(9.5);
+  doc.text("Generado con el Copiloto de viajes con IA de Viajoo", margin, coverY);
+  doc.setTextColor(...AI_PDF_COLORS.dark);
+  y = coverH + 26;
+
+  if (result.summary) bodyText(result.summary, { italic: true, color: AI_PDF_COLORS.muted });
+
+  // ---- Presupuesto ----
+  if (result.budgetEstimate) {
+    sectionTitle("Presupuesto estimado");
+    const b = result.budgetEstimate;
+    ensureSpace(24);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(...AI_PDF_COLORS.brand);
+    doc.text(money(b.total || 0), margin, y);
+    doc.setTextColor(...AI_PDF_COLORS.dark);
+    y += 22;
+    const breakdown = [
+      ["Vuelos", b.flights],
+      ["Hoteles", b.hotels],
+      ["Comida", b.food],
+      ["Transporte", b.transport],
+      ["Actividades", b.activities],
+    ].filter(([, v]) => v);
+    if (breakdown.length) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      breakdown.forEach(([label, v]) => {
+        ensureSpace(14);
+        doc.text(`${label}: ${money(v)}`, margin, y);
+        y += 14;
+      });
+      y += 8;
+    }
+  }
+
+  // ---- Consejos de transporte ----
+  if (result.transportTips) {
+    sectionTitle("Consejos de transporte");
+    bodyText(result.transportTips, { size: 10 });
+  }
+
+  // ---- Días ----
+  (result.days || []).forEach((day, i) => {
+    sectionTitle(`Día ${day.dayNumber || i + 1} · ${formatDatePretty(day.date)}`);
+    if (day.title) bodyText(day.title, { italic: true, size: 10, color: AI_PDF_COLORS.muted });
+
+    (day.items || []).forEach((it) => {
+      ensureSpace(28);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(...AI_PDF_COLORS.dark);
+      const label = `${it.time ? it.time + "  " : ""}${it.title || "Actividad"}`;
+      const titleLines2 = doc.splitTextToSize(label, contentW - (it.estCost ? 90 : 0));
+      doc.text(titleLines2, margin, y);
+      if (it.estCost) {
+        doc.setFont("helvetica", "bold");
+        doc.text(money(it.estCost), pageW - margin, y, { align: "right" });
+      }
+      y += titleLines2.length * 13;
+      const subtitle = [it.location, it.notes].filter(Boolean).join(" · ");
+      if (subtitle) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9.5);
+        doc.setTextColor(...AI_PDF_COLORS.muted);
+        const subLines = doc.splitTextToSize(subtitle, contentW);
+        doc.text(subLines, margin, y);
+        y += subLines.length * 12;
+      }
+      doc.setTextColor(...AI_PDF_COLORS.dark);
+      y += 6;
+    });
+
+    if (day.restaurants && day.restaurants.length) {
+      ensureSpace(14);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...AI_PDF_COLORS.muted);
+      const restText = "Restaurantes recomendados: " + day.restaurants.map((r) => r.name + (r.priceRange ? ` (${r.priceRange})` : "")).join(" · ");
+      const restLines = doc.splitTextToSize(restText, contentW);
+      doc.text(restLines, margin, y);
+      y += restLines.length * 12 + 6;
+      doc.setTextColor(...AI_PDF_COLORS.dark);
+    }
+  });
+
+  // ---- Pie ----
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...AI_PDF_COLORS.muted);
+    doc.text("Viajoo · Plan generado con IA — comprueba horarios y precios antes de viajar", margin, pageH - 20);
+    doc.text(`${p}/${pageCount}`, pageW - margin, pageH - 20, { align: "right" });
+    doc.setTextColor(...AI_PDF_COLORS.dark);
+  }
+
+  return doc;
+}
+
+function aiPlanPdfFileName(tripInfo) {
+  const destination = tripInfo.destination || tripInfo.name || "viaje";
+  return `plan-ia-${destination.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`;
+}
+
+function exportAiPlanPdf(tripInfo, result) {
+  if (!window.jspdf) {
+    toast("No se pudo generar el PDF (falta cargar una librería). Revisa tu conexión y vuelve a intentarlo.");
+    return;
+  }
+  const doc = buildAiPlanPdfDoc(tripInfo, result);
+  doc.save(aiPlanPdfFileName(tripInfo));
+  toast("PDF descargado");
+}
+
+function buildAiPlanShareText(tripInfo, result) {
+  const destination = tripInfo.destination || tripInfo.name || "tu próximo viaje";
+  const dateRange =
+    tripInfo.start_date && tripInfo.end_date
+      ? `${formatDatePretty(tripInfo.start_date)} → ${formatDatePretty(tripInfo.end_date)}`
+      : "";
+  const lines = [`✨ Plan de viaje a ${destination}`, dateRange].filter(Boolean);
+  if (result.summary) lines.push("", result.summary);
+  if (result.budgetEstimate && result.budgetEstimate.total) {
+    lines.push("", `Presupuesto estimado: ${money(result.budgetEstimate.total)}`);
+  }
+  (result.days || []).forEach((day, i) => {
+    const dayLabel = `Día ${day.dayNumber || i + 1} (${formatDatePretty(day.date)})${day.title ? ` — ${day.title}` : ""}`;
+    lines.push("", dayLabel);
+    (day.items || []).forEach((it) => {
+      lines.push(`• ${it.time ? it.time + " " : ""}${it.title || "Actividad"}`);
+    });
+  });
+  lines.push("", "Creado con el Copiloto de viajes con IA de Viajoo ✈️");
+  return lines.join("\n");
+}
+
+/**
+ * "Compartir por WhatsApp": en móvil usa el panel nativo de
+ * compartir (navigator.share), que incluye WhatsApp entre las
+ * opciones y, si el navegador lo permite, adjunta el PDF de verdad
+ * en vez de solo texto. Si no hay panel nativo (la mayoría de
+ * ordenadores de escritorio), cae a abrir WhatsApp Web/la app con el
+ * resumen ya escrito (wa.me no admite adjuntar archivos por URL).
+ */
+async function shareAiPlanViaWhatsapp(tripInfo, result) {
+  const text = buildAiPlanShareText(tripInfo, result);
+
+  if (navigator.share) {
+    try {
+      if (window.jspdf && navigator.canShare) {
+        const blob = buildAiPlanPdfDoc(tripInfo, result).output("blob");
+        const file = new File([blob], aiPlanPdfFileName(tripInfo), { type: "application/pdf" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "Plan de viaje", text });
+          return;
+        }
+      }
+      await navigator.share({ title: "Plan de viaje", text });
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return; // canceló el panel de compartir
+      // si algo raro pasa con el panel nativo, seguimos con el enlace de abajo
+    }
+  }
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+}
+
+// OJO: no usa la clase "modal-actions" a propósito. Esta fila queda
+// anidada dentro de #ai-planner-body / #ai-new-body, es decir, ANTES
+// en el DOM que la fila de acciones fija del sheet (Descartar/Aplicar).
+// Si compartiera esa clase, `overlay.querySelector(".modal-actions")`
+// (usado más abajo para rellenar Descartar/Aplicar) encontraría esta
+// fila primero y la pisaría por error.
+function aiPlanShareRowHtml() {
+  return h`
+    <div style="display:flex; gap:10px; margin-top:2px;">
+      <button type="button" class="btn btn-secondary" id="ai-share-pdf">📄 Descargar PDF</button>
+      <button type="button" class="btn btn-secondary" id="ai-share-whatsapp">💬 WhatsApp</button>
+    </div>`;
+}
+
+function wireAiPlanShareRow(container, tripInfo, result) {
+  container.querySelector("#ai-share-pdf").addEventListener("click", () => exportAiPlanPdf(tripInfo, result));
+  container.querySelector("#ai-share-whatsapp").addEventListener("click", () => shareAiPlanViaWhatsapp(tripInfo, result));
+}
+
 function resultPreviewHtml(result) {
   const b = result.budgetEstimate;
   const budgetHtml = b
@@ -325,7 +587,8 @@ async function openAiPlannerSheet(trip, onApplied) {
       return;
     }
 
-    body.innerHTML = resultPreviewHtml(result);
+    body.innerHTML = resultPreviewHtml(result) + aiPlanShareRowHtml();
+    wireAiPlanShareRow(body, trip, result);
     overlay.querySelector(".modal-actions").innerHTML = `
       <button type="button" class="btn btn-ghost" id="ai-discard">Descartar</button>
       <button type="button" class="btn btn-primary" id="ai-apply">✅ Aplicar al itinerario</button>`;
@@ -512,7 +775,8 @@ async function openAiNewTripSheet() {
       return;
     }
 
-    body.innerHTML = resultPreviewHtml(result);
+    body.innerHTML = resultPreviewHtml(result) + aiPlanShareRowHtml();
+    wireAiPlanShareRow(body, { name: destination, destination, start_date: startDate, end_date: endDate }, result);
     overlay.querySelector(".modal-actions").innerHTML = `
       <button type="button" class="btn btn-ghost" id="ai-new-discard">Descartar</button>
       <button type="button" class="btn btn-primary" id="ai-new-apply">✅ Crear viaje y aplicar</button>`;

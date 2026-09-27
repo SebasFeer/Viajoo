@@ -558,6 +558,48 @@ function bookingSearchUrl(trip) {
   return `https://www.booking.com/searchresults.html?${params.toString()}`;
 }
 
+/**
+ * Enlace de búsqueda de vuelos en Booking.com. OJO: a diferencia de
+ * hoteles, el buscador de vuelos de Booking no tiene una URL de
+ * búsqueda por texto libre documentada (usa códigos de aeropuerto
+ * IATA para origen/destino, que no pedimos en la app), así que esto
+ * es "mejor esfuerzo": intenta precargar el destino, pero si Booking
+ * no lo reconoce, el usuario cae en su buscador de vuelos igual y
+ * solo tiene que escribirlo. Mismo hueco de afiliado que arriba.
+ */
+function flightSearchUrl(trip) {
+  const destination = trip.destination || trip.name || "";
+  if (!destination) return "https://www.booking.com/flights/";
+  const params = new URLSearchParams({ type: "ONEWAY", adults: "1", to: destination });
+  if (trip.start_date) params.set("depart", trip.start_date);
+  return `https://www.booking.com/flights/index.html?${params.toString()}`;
+}
+
+/**
+ * Enlace a la página de actividades/excursiones de Civitatis para el
+ * destino del viaje. Civitatis organiza sus páginas por ciudad
+ * (civitatis.com/es/{ciudad}/, sin buscador por texto libre fiable),
+ * así que se arma el slug a partir del nombre de la ciudad (antes de
+ * la primera coma, sin acentos ni mayúsculas). Para destinos poco
+ * turísticos o mal escritos puede no existir esa página exacta —
+ * Civitatis entonces muestra su portada en vez de dar error, así que
+ * nunca se rompe, solo pierde la precampilación. Para sumar ingresos
+ * de afiliado hace falta darse de alta en el Programa de Afiliados de
+ * Civitatis y añadir aquí el parámetro de campaña (`?ref=...` o el
+ * que ellos indiquen) con el ID que den.
+ */
+function civitatisSearchUrl(trip) {
+  const destination = trip.destination || trip.name || "";
+  const city = destination.split(",")[0].trim();
+  const slug = city
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `https://www.civitatis.com/es/${slug}/` : "https://www.civitatis.com/es/";
+}
+
 async function renderHotels(trip) {
   const hotels = await Data.getAllByTrip("hotels", trip.id);
   hotels.sort((a, b) => (a.check_in || "").localeCompare(b.check_in || ""));
@@ -910,6 +952,37 @@ function openTransportForm(trip, t) {
 // RESERVAS
 // ============================================================
 
+/** Grid de 3 accesos rápidos a webs externas de reserva (hoteles y
+ * vuelos en Booking.com, actividades en Civitatis), pensado para la
+ * pestaña de Reservas. Un color propio por tarjeta ayuda a
+ * distinguirlas de un vistazo. */
+function quickBookGridHtml(trip) {
+  const tiles = [
+    { id: "qb-hotels", icon: "🏨", label: "Hotel", sub: "Booking.com", color: "#003b95" },
+    { id: "qb-flights", icon: "✈️", label: "Vuelo", sub: "Booking.com", color: "#003b95" },
+    { id: "qb-activities", icon: "🎟️", label: "Actividades", sub: "Civitatis", color: "#e0483e" },
+  ];
+  return h`
+    <div class="quickbook-grid">
+      ${tiles
+        .map(
+          (tl) => h`
+        <button type="button" class="quickbook-tile" id="${tl.id}">
+          <span class="quickbook-tile-icon" style="--tile-color:${tl.color};">${tl.icon}</span>
+          <span class="quickbook-tile-label">${tl.label}</span>
+          <span class="quickbook-tile-sub">${tl.sub}</span>
+        </button>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function wireQuickBookGrid(trip) {
+  document.getElementById("qb-hotels")?.addEventListener("click", () => window.open(bookingSearchUrl(trip), "_blank", "noopener"));
+  document.getElementById("qb-flights")?.addEventListener("click", () => window.open(flightSearchUrl(trip), "_blank", "noopener"));
+  document.getElementById("qb-activities")?.addEventListener("click", () => window.open(civitatisSearchUrl(trip), "_blank", "noopener"));
+}
+
 async function renderReservations(trip) {
   const items = await Data.getAllByTrip("reservations", trip.id);
   items.sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
@@ -939,9 +1012,10 @@ async function renderReservations(trip) {
         .join("")
     : emptyState("🎟️", t("empty_reservations"));
 
-  section(list);
+  section(quickBookGridHtml(trip) + list);
   setFab(fabBtn());
 
+  wireQuickBookGrid(trip);
   wireTicketActions("reservations", items, (r) => openReservationForm(trip, r), (r) => openMapsAppPicker({ type: "point", location: r.location }));
   document.getElementById("fab-add").addEventListener("click", () => openReservationForm(trip));
   fetchStubPhotos("reservations", items, "location");
@@ -2058,9 +2132,8 @@ async function exportMapPdf(trip, located, dayLabel) {
 }
 
 // ------------------------------------------------------------
-// ITINERARIO COMPLETO EN PDF (Pro) — a diferencia de "Exportar /
-// Imprimir" (que delega en el diálogo de impresión del navegador con
-// una tabla básica), esto genera un PDF de verdad con jsPDF: portada
+// ITINERARIO COMPLETO EN PDF (Pro) — genera un PDF de verdad con
+// jsPDF: portada
 // con el nombre del viaje, y una sección con su propio color de
 // acento por tipo de dato (vuelos, hoteles, itinerario día a día,
 // transporte, reservas, gastos y checklist).
@@ -2565,61 +2638,6 @@ async function deleteAndRefresh(storeName, id, message) {
   await renderApp();
 }
 
-// ============================================================
-// VISTA DE IMPRESIÓN (sustituye a la exportación PDF con ReportLab)
-// ============================================================
-
-async function renderPrintArea(trip) {
-  const [flights, hotels, itin, transport, reservations, expenses, checklist] = await Promise.all([
-    Data.getAllByTrip("flights", trip.id),
-    Data.getAllByTrip("hotels", trip.id),
-    Data.getAllByTrip("itinerary", trip.id),
-    Data.getAllByTrip("transport", trip.id),
-    Data.getAllByTrip("reservations", trip.id),
-    Data.getAllByTrip("expenses", trip.id),
-    Data.getAllByTrip("checklist", trip.id),
-  ]);
-
-  const total = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-
-  const table = (headers, rows) => h`
-    <table style="width:100%; border-collapse:collapse; margin-bottom:18px; font-size:13px;">
-      <thead><tr>${headers.map((hd) => `<th style="text-align:left; border-bottom:1px solid #999; padding:4px;">${hd}</th>`).join("")}</tr></thead>
-      <tbody>${rows
-        .map((r) => `<tr>${r.map((c) => `<td style="padding:4px; border-bottom:1px solid #ddd;">${escapeHtml(c)}</td>`).join("")}</tr>`)
-        .join("")}</tbody>
-    </table>`;
-
-  const html = h`
-    <h1 style="font-family:Georgia,serif;">${escapeHtml(trip.name)}</h1>
-    <p>${escapeHtml(trip.destination)} · ${formatDatePretty(trip.start_date)} → ${formatDatePretty(trip.end_date)}</p>
-    ${trip.notes ? `<p><em>${escapeHtml(trip.notes)}</em></p>` : ""}
-
-    <h2>Vuelos</h2>
-    ${flights.length ? table(["Fecha","Hora","Aerolínea","Nº","Origen","Destino"], flights.map((f) => [f.date,f.time,f.airline,f.flight_number,f.origin,f.destination])) : "<p>Sin vuelos.</p>"}
-
-    <h2>Hoteles</h2>
-    ${hotels.length ? table(["Nombre","Dirección","Entrada","Salida","Precio"], hotels.map((hh) => [hh.name,hh.address,hh.check_in,hh.check_out,money(hh.price)])) : "<p>Sin hoteles.</p>"}
-
-    <h2>Itinerario</h2>
-    ${itin.length ? table(["Fecha","Hora","Título","Lugar"], itin.map((i) => [i.date,i.time,i.title,i.location])) : "<p>Sin actividades.</p>"}
-
-    <h2>Transporte</h2>
-    ${transport.length ? table(["Fecha","Tipo","Origen","Destino","Precio"], transport.map((t) => [t.date,t.type,t.origin,t.destination,money(t.price)])) : "<p>Sin transportes.</p>"}
-
-    <h2>Reservas</h2>
-    ${reservations.length ? table(["Fecha","Tipo","Nombre","Lugar","Precio"], reservations.map((r) => [r.date,r.type,r.name,r.location,money(r.price)])) : "<p>Sin reservas.</p>"}
-
-    <h2>Gastos (total: ${money(total)})</h2>
-    ${expenses.length ? table(["Fecha","Categoría","Descripción","Importe"], expenses.map((e) => [e.date,e.category,e.description,money(e.amount)])) : "<p>Sin gastos.</p>"}
-
-    <h2>Checklist</h2>
-    ${checklist.length ? table(["Estado","Tarea"], checklist.map((c) => [c.completed ? "OK" : "Pendiente", c.task])) : "<p>Sin tareas.</p>"}
-  `;
-
-  document.getElementById("print-area").innerHTML = html;
-}
-
 // ------------------------------------------------------------
 // EXPORTAR AL CALENDARIO DEL DISPOSITIVO (.ics) — solo bajo demanda.
 // Genera un único archivo .ics con vuelos, hoteles, itinerario,
@@ -2804,4 +2822,4 @@ async function exportTripToIcs(trip) {
   toast("Calendario descargado — ábrelo con tu app de calendario para añadirlo");
 }
 
-export { TABS, renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };
+export { TABS, renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl };

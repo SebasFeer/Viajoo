@@ -11,9 +11,6 @@ sin Mac y sin cuenta de Apple Developer.
 - Panel de resumen por viaje (presupuesto, checklist, próximos eventos).
 - Aviso en el resumen si hoy tienes un vuelo o una actividad.
 - Botón "Mapa" que abre Google Maps con la dirección o la ruta.
-- **Exportar / Imprimir**: genera una vista de todo el viaje y usa el diálogo de impresión
-  del propio navegador. En iPhone, desde ese diálogo puedes elegir "Guardar en PDF" —
-  sustituye a la exportación con ReportLab sin depender de librerías externas.
 - **Copia de seguridad**: exporta todos tus datos a un archivo `.json` y podrás
   importarlos de nuevo (en este u otro dispositivo). Los datos viven en el propio
   navegador (IndexedDB), así que exportar de vez en cuando es tu forma de tener backup.

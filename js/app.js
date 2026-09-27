@@ -15,7 +15,8 @@ import {
   currentUser,
   onAuthChange,
   signUp,
-  signIn,
+  signInSecure,
+  resetPassword,
   signInWithGoogle,
   signOutUser,
   pushToCloud,
@@ -38,7 +39,7 @@ import {
   openAiNewTripSheet,
 } from "./ai-copilot.js";
 import { getFlightStatus, isFlightStatusConfigured } from "./flightstatus.js";
-import { renderSection, renderPrintArea, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
+import { renderSection, exportItineraryPdf, exportTripToIcs, openCurrencyConverterSheet, bookingSearchUrl } from "./sections.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon, brandMark, googleIcon } from "./icons.js";
 import { geocode, searchPlaces as searchPlaceSuggestions } from "./geocode.js";
@@ -804,7 +805,6 @@ async function renderTripShell() {
     <div class="view has-tabbar" id="section-content"></div>
     <div id="fab-slot"></div>
     ${renderTabbarHtml("trip")}
-    <div id="print-area"></div>
   `;
 
   root.querySelector("#btn-back").addEventListener("click", () => goBack());
@@ -995,7 +995,6 @@ function openTripMenu(trip) {
       }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-pdf">${icon("download")} Itinerario en PDF (Pro)</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-ics">${icon("calendar")} Exportar a calendario (.ics)</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-print">${icon("printer")} Exportar / Imprimir</button></div>
       <div class="modal-actions"><button class="btn btn-danger" id="mn-delete">${icon("trash")} Eliminar viaje</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="mn-close">Cerrar</button></div>
     </div>`;
@@ -1032,11 +1031,6 @@ function openTripMenu(trip) {
       state.tripId = null;
       withTransition(renderApp, "back");
     }
-  });
-  overlay.querySelector("#mn-print").addEventListener("click", async () => {
-    overlay.remove();
-    await renderPrintArea(trip);
-    setTimeout(() => window.print(), 150);
   });
   overlay.querySelector("#mn-pdf").addEventListener("click", async () => {
     overlay.remove();
@@ -2402,97 +2396,217 @@ async function openAccountSheet() {
 function renderAuthForm() {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Iniciar sesión</h2>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
-        Crea una cuenta para tener una copia de tus viajes en la nube, además de en
-        este dispositivo. Es opcional — la app sigue funcionando sin cuenta.
-      </p>
-      <div class="modal-actions" style="margin-top:14px;">
-        <button class="btn btn-secondary" id="auth-google">${googleIcon()} Continuar con Google</button>
-      </div>
-      <div class="auth-divider"><span>o con tu email</span></div>
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="auth-email" autocomplete="email" />
-      </div>
-      <div class="field">
-        <label>Contraseña</label>
-        <input type="password" id="auth-password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" />
-      </div>
-      <p id="auth-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
-      <div class="modal-actions">
-        <button class="btn btn-primary" id="auth-login">Iniciar sesión</button>
-      </div>
-      <div class="auth-divider"><span>¿Cuenta nueva?</span></div>
-      <div class="field">
-        <label>${t("auth_firstname_label")}</label>
-        <input type="text" id="auth-firstname" autocomplete="given-name" />
-      </div>
-      <div class="field">
-        <label>${t("auth_lastname_label")}</label>
-        <input type="text" id="auth-lastname" autocomplete="family-name" />
-      </div>
-      <div class="field">
-        <label>${t("auth_birthdate_label")}</label>
-        <input type="date" id="auth-birthdate" autocomplete="bday" />
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="auth-signup">Crear cuenta nueva</button>
-      </div>
-      <div class="modal-actions"><button class="btn btn-ghost" id="auth-close">Cerrar</button></div>
-    </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#auth-close").addEventListener("click", () => overlay.remove());
 
-  const errorEl = overlay.querySelector("#auth-error");
-  const emailEl = overlay.querySelector("#auth-email");
-  const passEl = overlay.querySelector("#auth-password");
-  const firstNameEl = overlay.querySelector("#auth-firstname");
-  const lastNameEl = overlay.querySelector("#auth-lastname");
-  const birthdateEl = overlay.querySelector("#auth-birthdate");
+  // Registro en 2 pasos: primero email + contraseña (para la cuenta
+  // en sí), y solo si eso es válido se pide nombre/apellido/fecha de
+  // nacimiento. Antes todo vivía en una sola pantalla compartida con
+  // el login, y era fácil no darse cuenta de que el email/contraseña
+  // de arriba también hacían falta para la cuenta nueva de abajo.
+  const registerData = { email: "", password: "" };
 
-  overlay.querySelector("#auth-google").addEventListener("click", async (e) => {
-    errorEl.textContent = "";
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    const birthDate = birthdateEl.value || null;
-    const { user, error, cancelled, redirecting } = await signInWithGoogle();
-    if (redirecting) return; // la página está navegando a Google, no hay más que hacer aquí
-    btn.disabled = false;
-    if (cancelled) return;
-    if (error) { errorEl.textContent = error; return; }
-    overlay.remove();
-    await afterLogin(user);
-    // El nombre ya viene de la cuenta de Google; solo falta la fecha
-    // de nacimiento, que Google no comparte, si la escribió.
-    if (birthDate) await saveBirthDate(birthDate);
-  });
+  function renderLoginView() {
+    overlay.innerHTML = h`
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <h2 class="modal-title">Iniciar sesión</h2>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
+          Crea una cuenta para tener una copia de tus viajes en la nube, además de en
+          este dispositivo. Es opcional — la app sigue funcionando sin cuenta.
+        </p>
+        <div class="modal-actions" style="margin-top:14px;">
+          <button type="button" class="btn btn-secondary" id="auth-google">${googleIcon()} Continuar con Google</button>
+        </div>
+        <div class="auth-divider"><span>o con tu email</span></div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="auth-email" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input type="password" id="auth-password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <p style="margin: -6px 0 0; text-align:right;">
+          <button type="button" class="link-btn" id="auth-forgot" style="font-size:12.5px;">¿Olvidaste tu contraseña?</button>
+        </p>
+        <p id="auth-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="auth-login">Iniciar sesión</button>
+        </div>
+        <div class="auth-divider"><span>¿Cuenta nueva?</span></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="auth-goto-register">Crear cuenta nueva</button>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn btn-ghost" id="auth-close">Cerrar</button></div>
+      </div>`;
 
-  overlay.querySelector("#auth-login").addEventListener("click", async () => {
-    errorEl.textContent = "";
-    const { user, error } = await signIn(emailEl.value.trim(), passEl.value);
-    if (error) { errorEl.textContent = error; return; }
-    overlay.remove();
-    await afterLogin(user);
-  });
+    const errorEl = overlay.querySelector("#auth-error");
+    const emailEl = overlay.querySelector("#auth-email");
+    const passEl = overlay.querySelector("#auth-password");
 
-  overlay.querySelector("#auth-signup").addEventListener("click", async () => {
-    errorEl.textContent = "";
-    const displayName = [firstNameEl.value.trim(), lastNameEl.value.trim()].filter(Boolean).join(" ");
-    const birthDate = birthdateEl.value || null;
-    const { user, error } = await signUp(emailEl.value.trim(), passEl.value, displayName || undefined);
-    if (error) { errorEl.textContent = error; return; }
-    overlay.remove();
-    // Cuenta recién creada: subimos lo que ya haya en este dispositivo.
-    toast("Cuenta creada, subiendo tus datos…");
-    await pushToCloud();
-    if (birthDate) await saveBirthDate(birthDate);
-    await renderApp();
-  });
+    overlay.querySelector("#auth-close").addEventListener("click", () => overlay.remove());
+
+    overlay.querySelector("#auth-google").addEventListener("click", async (e) => {
+      errorEl.textContent = "";
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const { user, error, cancelled, redirecting } = await signInWithGoogle();
+      if (redirecting) return; // la página está navegando a Google, no hay más que hacer aquí
+      btn.disabled = false;
+      if (cancelled) return;
+      if (error) { errorEl.textContent = error; return; }
+      overlay.remove();
+      await afterLogin(user);
+    });
+
+    overlay.querySelector("#auth-login").addEventListener("click", async (e) => {
+      errorEl.textContent = "";
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const { user, error } = await signInSecure(emailEl.value.trim(), passEl.value);
+      btn.disabled = false;
+      if (error) { errorEl.textContent = error; return; }
+      overlay.remove();
+      await afterLogin(user);
+    });
+
+    overlay.querySelector("#auth-forgot").addEventListener("click", async () => {
+      errorEl.textContent = "";
+      const email = emailEl.value.trim();
+      if (!email) {
+        errorEl.textContent = "Escribe tu email arriba primero.";
+        return;
+      }
+      const { ok, error } = await resetPassword(email);
+      if (!ok) { errorEl.textContent = error; return; }
+      toast("Te hemos enviado un email para restablecer tu contraseña.");
+    });
+
+    overlay.querySelector("#auth-goto-register").addEventListener("click", () => {
+      registerData.email = emailEl.value.trim();
+      renderRegisterStep1View();
+    });
+  }
+
+  function renderRegisterStep1View() {
+    overlay.innerHTML = h`
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <h2 class="modal-title">Crear cuenta · Paso 1 de 2</h2>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
+          Primero tu email y una contraseña para poder entrar después.
+        </p>
+        <div class="modal-actions" style="margin-top:14px;">
+          <button type="button" class="btn btn-secondary" id="auth-google">${googleIcon()} Continuar con Google</button>
+        </div>
+        <div class="auth-divider"><span>o con tu email</span></div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="auth-reg-email" autocomplete="email" value="${escapeHtml(registerData.email)}" />
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input type="password" id="auth-reg-password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <p id="auth-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="auth-back-to-login">Volver</button>
+          <button type="button" class="btn btn-primary" id="auth-reg-next">Siguiente</button>
+        </div>
+      </div>`;
+
+    const errorEl = overlay.querySelector("#auth-error");
+
+    overlay.querySelector("#auth-back-to-login").addEventListener("click", () => renderLoginView());
+
+    overlay.querySelector("#auth-google").addEventListener("click", async (e) => {
+      errorEl.textContent = "";
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const { user, error, cancelled, redirecting } = await signInWithGoogle();
+      if (redirecting) return;
+      btn.disabled = false;
+      if (cancelled) return;
+      if (error) { errorEl.textContent = error; return; }
+      // Con Google, email y contraseña ya los resuelve Google: no
+      // hace falta pasar por el paso 2 (nombre/apellido ya vienen de
+      // la cuenta; la fecha de nacimiento se puede añadir luego desde
+      // el perfil).
+      overlay.remove();
+      await afterLogin(user);
+    });
+
+    overlay.querySelector("#auth-reg-next").addEventListener("click", () => {
+      errorEl.textContent = "";
+      const email = overlay.querySelector("#auth-reg-email").value.trim();
+      const password = overlay.querySelector("#auth-reg-password").value;
+      if (!email || !email.includes("@")) {
+        errorEl.textContent = "Escribe un email válido.";
+        return;
+      }
+      if (!password || password.length < 6) {
+        errorEl.textContent = "La contraseña debe tener al menos 6 caracteres.";
+        return;
+      }
+      registerData.email = email;
+      registerData.password = password;
+      renderRegisterStep2View();
+    });
+  }
+
+  function renderRegisterStep2View() {
+    overlay.innerHTML = h`
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <h2 class="modal-title">Crear cuenta · Paso 2 de 2</h2>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
+          Y unos últimos datos tuyos.
+        </p>
+        <div class="field">
+          <label>${t("auth_firstname_label")}</label>
+          <input type="text" id="auth-firstname" autocomplete="given-name" />
+        </div>
+        <div class="field">
+          <label>${t("auth_lastname_label")}</label>
+          <input type="text" id="auth-lastname" autocomplete="family-name" />
+        </div>
+        <div class="field">
+          <label>${t("auth_birthdate_label")}</label>
+          <input type="date" id="auth-birthdate" autocomplete="bday" />
+        </div>
+        <p id="auth-error" style="color:#ff8b7f; font-size:12.5px; min-height:16px;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="auth-back-to-step1">Atrás</button>
+          <button type="button" class="btn btn-primary" id="auth-signup">Crear cuenta</button>
+        </div>
+      </div>`;
+
+    const errorEl = overlay.querySelector("#auth-error");
+
+    overlay.querySelector("#auth-back-to-step1").addEventListener("click", () => renderRegisterStep1View());
+
+    overlay.querySelector("#auth-signup").addEventListener("click", async (e) => {
+      errorEl.textContent = "";
+      const btn = e.currentTarget;
+      const firstName = overlay.querySelector("#auth-firstname").value.trim();
+      const lastName = overlay.querySelector("#auth-lastname").value.trim();
+      const birthDate = overlay.querySelector("#auth-birthdate").value || null;
+      const displayName = [firstName, lastName].filter(Boolean).join(" ");
+      btn.disabled = true;
+      const { user, error } = await signUp(registerData.email, registerData.password, displayName || undefined);
+      btn.disabled = false;
+      if (error) { errorEl.textContent = error; return; }
+      overlay.remove();
+      // Cuenta recién creada: subimos lo que ya haya en este dispositivo.
+      toast("Cuenta creada, subiendo tus datos…");
+      await pushToCloud();
+      if (birthDate) await saveBirthDate(birthDate);
+      await renderApp();
+    });
+  }
+
+  renderLoginView();
 }
 
 async function afterLogin(user) {
