@@ -12,7 +12,7 @@ import { geocodeAll, routeBetween, optimizeRouteOrder } from "./geocode.js";
 import { state, root, h, toast, showFormModal, confirmAction, renderApp, withTransition, openDiscoverSheet, openMapsAppPicker, openRegisterInviteSheet, hasProAccess } from "./app.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon } from "./icons.js";
-import { isAiCopilotConfigured, openAiPlannerSheet, openAiDayRegenerateSheet } from "./ai-copilot.js";
+import { isAiCopilotConfigured, openAiPlannerSheet } from "./ai-copilot.js";
 import { TOP_CURRENCIES, ALL_CURRENCIES, convertCurrency } from "./currency.js";
 import { t } from "./i18n.js";
 
@@ -754,12 +754,7 @@ async function renderItinerary(trip) {
   const aiMeta = itinDayFilter !== "__nodate" ? trip.ai_plan?.byDate?.[itinDayFilter] : null;
   const aiActionsHtml = isAiCopilotConfigured()
     ? `<div class="ai-actions-row">
-         <button class="btn btn-ghost btn-sm" id="ai-generate-day">✨ Generar todo el itinerario (Pro)</button>
-         ${
-           itinDayFilter !== "__nodate"
-             ? `<button class="btn btn-ghost btn-sm" id="ai-regenerate-day">🔄 Regenerar este día (Pro)</button>`
-             : ""
-         }
+         <button class="btn btn-ghost btn-sm" id="ai-generate-day">✨ Generar todo el itinerario</button>
        </div>`
     : "";
   const aiRecosHtml =
@@ -788,14 +783,13 @@ async function renderItinerary(trip) {
           ${isLast ? "" : `<div class="tl-line"></div>`}
         </div>
         <div class="tl-content">
-          <div class="tl-cat-icon" style="background:${type.soft}; color:${type.color};">${icon(type.icon)}</div>
           <div class="tl-info">
             <p class="tl-time">${item.time || ""}</p>
             <p class="tl-title">${escapeHtml(item.title || "Actividad")}</p>
             <span class="tag-chip" style="background:${type.soft}; color:${type.color};">${type.label}</span>
             ${item.location ? `<p class="tl-addr">${escapeHtml(item.location)}</p>` : ""}
             ${item.notes ? `<p class="tl-addr">${escapeHtml(item.notes)}</p>` : ""}
-            <div class="ticket-actions" style="margin-top:8px;">
+            <div class="ticket-actions tl-actions">
               ${item.location ? `<button data-act="map">🗺️ Mapa</button>` : ""}
               <button data-act="edit">✏️ Editar</button>
               <button data-act="delete" class="danger">🗑️</button>
@@ -826,10 +820,6 @@ async function renderItinerary(trip) {
   document
     .getElementById("ai-generate-day")
     ?.addEventListener("click", () => openAiPlannerSheet(trip, (updated) => renderItinerary(updated || trip)));
-  document.getElementById("ai-regenerate-day")?.addEventListener("click", () => {
-    const dayNum = dayIndex || null;
-    openAiDayRegenerateSheet(trip, itinDayFilter, dayNum, (updated) => renderItinerary(updated || trip));
-  });
   document.getElementById("fab-add").addEventListener("click", () =>
     openItineraryForm(trip, null, itinDayFilter !== "__nodate" ? itinDayFilter : null)
   );

@@ -610,80 +610,6 @@ async function openAiPlannerSheet(trip, onApplied) {
 }
 
 // ============================================================
-// SHEET: regenerar un solo día
-// ============================================================
-
-async function openAiDayRegenerateSheet(trip, dateStr, dayNumber, onApplied) {
-  if (!(await checkAiCopilotAccess())) return;
-
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">🔄 Regenerar día con IA</h2>
-      <p style="color:var(--muted); font-size:13px; margin-top:-8px;">${formatDatePretty(dateStr)}</p>
-      <div class="field">
-        <label>¿Algo concreto para este día? (opcional)</label>
-        <textarea id="ai-day-instructions" rows="2" placeholder="Ej. quiero algo más tranquilo, o céntralo en museos..."></textarea>
-      </div>
-      <div id="ai-day-body"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="ai-day-cancel">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="ai-day-generate">🔄 Regenerar este día</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#ai-day-cancel").addEventListener("click", () => overlay.remove());
-
-  overlay.querySelector("#ai-day-generate").addEventListener("click", async () => {
-    const instructions = overlay.querySelector("#ai-day-instructions").value.trim();
-    const body = overlay.querySelector("#ai-day-body");
-    const genBtn = overlay.querySelector("#ai-day-generate");
-    genBtn.disabled = true;
-    body.innerHTML = aiLoadingHtml("Rehaciendo este día…");
-
-    const allDays = trip.ai_plan?.byDate
-      ? Object.entries(trip.ai_plan.byDate)
-          .filter(([d]) => d !== dateStr)
-          .map(([d, meta]) => ({ date: d, dayNumber: meta.dayNumber, title: meta.title }))
-      : [];
-
-    const result = await requestItinerary({
-      mode: "day",
-      destination: trip.destination || trip.name,
-      targetDate: dateStr,
-      dayNumber,
-      budget: trip.budget || null,
-      currency: "EUR",
-      interests: "",
-      instructions,
-      context: allDays,
-    });
-
-    genBtn.disabled = false;
-    if (!result) {
-      body.innerHTML = "";
-      return;
-    }
-
-    body.innerHTML = resultPreviewHtml(result);
-    overlay.querySelector(".modal-actions").innerHTML = `
-      <button type="button" class="btn btn-ghost" id="ai-day-discard">Descartar</button>
-      <button type="button" class="btn btn-primary" id="ai-day-apply">✅ Aplicar este día</button>`;
-    overlay.querySelector("#ai-day-discard").addEventListener("click", () => overlay.remove());
-    overlay.querySelector("#ai-day-apply").addEventListener("click", async () => {
-      await applyDaysToItinerary(trip, result.days);
-      const updatedTrip = await saveAiPlanMeta(trip, result, { merge: true });
-      overlay.remove();
-      toast("Día regenerado");
-      if (onApplied) onApplied(updatedTrip);
-    });
-  });
-}
-
-// ============================================================
 // SHEET: crear un viaje nuevo desde cero con IA (desde el inicio,
 // antes de que exista ningún viaje). A partir de destino + fechas +
 // gustos, crea el viaje y le aplica el itinerario generado.
@@ -807,7 +733,6 @@ async function openAiNewTripSheet() {
 export {
   isAiCopilotConfigured,
   openAiPlannerSheet,
-  openAiDayRegenerateSheet,
   openAiNewTripSheet,
   isAiCopilotMockEnabled,
   setAiCopilotMockEnabled,
