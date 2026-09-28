@@ -35,3 +35,19 @@ jobs:
           for f in $(grep -ohE 'from ["'"'"']\.[^"'"'"']+["'"'"']' *.js | sed -E "s/from [\"']//;s/[\"']$//" | sort -u); do
             test -f "$f" || { echo "Falta js/$f (referenciado con import)"; exit 1; }
           done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias de test (vitest, playwright)
+        run: npm ci
+
+      - name: Pruebas de componente e integración (vitest)
+        run: npm run test:unit
+
+      - name: Instalar el navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas end-to-end (Playwright)
+        run: npm run test:e2e
