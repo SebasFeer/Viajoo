@@ -786,7 +786,6 @@ async function renderItinerary(trip) {
           <div class="tl-info">
             <p class="tl-time">${item.time || ""}</p>
             <p class="tl-title">${escapeHtml(item.title || "Actividad")}</p>
-            <span class="tag-chip" style="background:${type.soft}; color:${type.color};">${type.label}</span>
             ${item.location ? `<p class="tl-addr">${escapeHtml(item.location)}</p>` : ""}
             ${item.notes ? `<p class="tl-addr">${escapeHtml(item.notes)}</p>` : ""}
             <div class="ticket-actions tl-actions">
