@@ -3,6 +3,13 @@ import { guardOnLaunch, installBackgroundLock } from "./lock.js";
 import { onAuthChange, enableAutoSync, syncOnLaunch, completeGoogleRedirect } from "./cloud.js";
 import { shouldShowOnboarding, renderOnboarding } from "./onboarding.js";
 import { loadLanguage } from "./i18n.js";
+import { initAnalyticsIfConsented, track } from "./analytics.js";
+
+// Si ya se había dado consentimiento para estadísticas de uso en una
+// sesión anterior, carga Analytics ahora (si no, esto no hace nada —
+// ver analytics.js). No bloquea el resto del arranque.
+initAnalyticsIfConsented();
+track("app_open");
 
 // Aplica el tema guardado (claro/oscuro/automático) antes del primer
 // render, para evitar el parpadeo del tema por defecto.

@@ -15,6 +15,10 @@ const firebaseConfig = {
   storageBucket: "travel-planner-e16e1.firebasestorage.app",
   messagingSenderId: "296430068371",
   appId: "1:296430068371:web:45e9fe3400d3f617362366",
+  // measurementId: "G-XXXXXXXXXX", — se rellena al activar Google
+  // Analytics para este proyecto en la consola de Firebase (Project
+  // settings → General → tu app web → "Measurement ID"). Mientras
+  // falte, analytics.js no hace nada (ver el comentario allí).
 };
 
 export { firebaseConfig };

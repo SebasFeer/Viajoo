@@ -1,4 +1,5 @@
 import { Data, DEFAULT_CHECKLIST_ITEMS } from "./db.js";
+import { isAnalyticsConfigured, hasAnalyticsConsent, setAnalyticsConsent, track } from "./analytics.js";
 import {
   money,
   todayString,
@@ -2150,6 +2151,7 @@ async function openTripForm(trip, prefill) {
         const id = await Data.add("trips", values);
         await Data.addDefaultChecklistItems(id);
         toast("Viaje creado");
+        track("trip_created");
       }
       await renderApp();
     },
@@ -2709,6 +2711,7 @@ function openConfigSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-theme">${icon("theme")} ${t("settings_theme")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-language">${icon("globe")} ${t("settings_language")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-notifications">${icon("bell")} ${t("settings_notifications")}</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="cfg-analytics">📊 ${t("settings_analytics")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-security">${icon("lock")} ${t("settings_security")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-legal">${icon("shield")} ${t("settings_privacy")}</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="cfg-close">${t("common_close")}</button></div>
@@ -2725,8 +2728,55 @@ function openConfigSheet() {
   go("#cfg-theme", openThemeSheet);
   go("#cfg-language", openLanguageSheet);
   go("#cfg-notifications", openNotificationsSheet);
+  go("#cfg-analytics", openAnalyticsSheet);
   go("#cfg-security", openSecuritySheet);
   go("#cfg-legal", openLegalSheet);
+}
+
+// ------------------------------------------------------------
+// ESTADÍSTICAS DE USO — activa Firebase Analytics (Google), apagado
+// por defecto. Ver analytics.js: sin measurementId configurado en el
+// proyecto Firebase, este interruptor no hace nada todavía aunque se
+// active (no hay ningún sitio al que mandar los datos).
+// ------------------------------------------------------------
+async function openAnalyticsSheet() {
+  const enabled = await hasAnalyticsConsent();
+  const configured = isAnalyticsConfigured();
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = h`
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h2 class="modal-title">📊 Estadísticas de uso</h2>
+      <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
+        Si lo activas, Viajoo manda a Google Analytics datos anónimos
+        de uso (qué pantallas se abren, qué funciones se usan) para
+        saber qué mejorar. Nunca incluye tus viajes, gastos ni nada
+        de lo que guardas dentro de la app. Está apagado por defecto:
+        actívalo solo si quieres ayudarnos.
+      </p>
+      ${
+        !configured
+          ? `<p style="color:var(--muted); font-size:12.5px;">Todavía no está activado para esta app — este interruptor no hará nada por ahora.</p>`
+          : ""
+      }
+      <div class="modal-actions" style="margin-top:10px;">
+        <button class="btn ${enabled ? "btn-danger" : "btn-primary"}" id="analytics-toggle">
+          ${enabled ? "🔕 Desactivar estadísticas" : "📊 Activar estadísticas"}
+        </button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="analytics-close">Cerrar</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
+  overlay.querySelector("#analytics-close").addEventListener("click", () => overlay.remove());
+
+  overlay.querySelector("#analytics-toggle").addEventListener("click", async () => {
+    await setAnalyticsConsent(!enabled);
+    toast(enabled ? "Estadísticas de uso desactivadas" : "Estadísticas de uso activadas");
+    overlay.remove();
+  });
 }
 
 async function openLanguageSheet() {
@@ -3544,9 +3594,15 @@ verificación la hace tu propio sistema operativo: la app nunca recibe ni
 guarda tu huella o tu cara, solo la confirmación de que el gesto se
 completó. Nadie más que tú puede ver ni recuperar tu PIN.
 
-10. Analítica y publicidad
-Viajoo no usa herramientas de analítica ni de seguimiento, y no
-muestra publicidad dentro de la app.
+10. Estadísticas de uso y publicidad
+Viajoo no muestra publicidad dentro de la app. Sí incluye Google
+Analytics para medir el uso (qué pantallas se abren, qué funciones se
+usan), pero apagado por defecto: solo se activa si tú mismo lo
+enciendes en Ajustes → Preferencias → Estadísticas de uso, y puedes
+apagarlo cuando quieras desde el mismo sitio. Mientras no lo
+actives, no se carga nada de Google Analytics ni se manda ningún
+dato. Nunca incluye tus viajes, gastos ni nada de lo que guardas
+dentro de la app — ver más detalle en Cookies y almacenamiento local.
 
 11. Base legal y conservación de tus datos
 Tratamos tus datos para prestarte el servicio que pides (organizar tus
@@ -3698,7 +3754,7 @@ const COOKIES_TEXT = `
 
 1. Viajoo no usa cookies de rastreo ni publicitarias
 Esta aplicación no coloca cookies propias ni de terceros con fines de
-analítica, publicidad o seguimiento entre sitios.
+publicidad o seguimiento entre sitios.
 
 2. Qué guarda tu navegador entonces
 En vez de cookies, Viajoo guarda tus datos en dos almacenes
@@ -3712,7 +3768,16 @@ Puedes borrar todo esto en cualquier momento desde los ajustes de tu
 navegador ("borrar datos del sitio"), o desde Ajustes → Copiar /
 restaurar datos dentro de la app.
 
-3. Fuentes de Google Fonts
+3. Estadísticas de uso (Google Analytics) — apagado por defecto
+Ajustes → Preferencias → Estadísticas de uso deja activar, de forma
+voluntaria, que Viajoo mande a Google Analytics datos anónimos de uso
+(qué pantallas se abren, qué funciones se usan) para saber qué
+mejorar. Mientras no lo actives tú mismo, no se carga nada de Google
+Analytics ni se manda ningún dato. Nunca incluye tus viajes, gastos
+ni nada de lo que guardas dentro de la app, y puedes desactivarlo en
+cualquier momento desde el mismo ajuste.
+
+4. Fuentes de Google Fonts
 Para mostrar su tipografía, la app carga las fuentes Plus Jakarta Sans,
 Inter e IBM Plex Mono desde fonts.googleapis.com. Esta petición ocurre
 en cada visita (no depende de que actives nada) y, como cualquier
@@ -3720,13 +3785,13 @@ carga desde un servidor externo, revela tu dirección IP a Google
 mientras se descarga la fuente. No se usa para publicidad ni para
 identificarte.
 
-4. Firebase (si inicias sesión)
+5. Firebase (si inicias sesión)
 Si creas una cuenta o inicias sesión con Google, el SDK de Firebase
 puede usar almacenamiento local del navegador (no necesariamente
 cookies) para mantener tu sesión iniciada entre visitas. Esto solo
 ocurre si decides iniciar sesión.
 
-5. Cómo desactivarlo
+6. Cómo desactivarlo
 Puedes bloquear el almacenamiento local desde los ajustes de tu
 navegador, pero ten en cuenta que Viajoo necesita IndexedDB
 para guardar tus viajes: si lo bloqueas por completo, la app no podrá

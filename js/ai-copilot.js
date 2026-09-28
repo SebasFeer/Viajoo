@@ -14,6 +14,7 @@ import { Data } from "./db.js";
 import { h, toast, state, withTransition, renderApp, openRegisterInviteSheet, hasProAccess, checkPaidQueryLimit, bumpPaidQueryCount, syncPaidQueryLimitReached, PAID_QUERY_LIMIT } from "./app.js";
 import { escapeHtml, formatDatePretty, money, daysBetween } from "./utils.js";
 import { quickBookGridHtml, wireQuickBookGrid } from "./sections.js";
+import { track } from "./analytics.js";
 
 async function checkAiCopilotAccess() {
   if (!isAiCopilotConfigured()) {
@@ -604,6 +605,7 @@ async function openAiPlannerSheet(trip, onApplied) {
       const updatedTrip = await saveAiPlanMeta(trip, result, { merge: false });
       overlay.remove();
       toast("Itinerario generado y aplicado");
+      track("ai_itinerary_generated");
       if (onApplied) onApplied(updatedTrip);
     });
   });
