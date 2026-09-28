@@ -538,9 +538,17 @@ async function joinSharedTrip(code) {
   }
 }
 
+// Recuerda, por código de viaje compartido, la fecha de la última
+// versión ya aplicada localmente — para no reescribir los datos (ni
+// avisar de una actualización) cuando refreshSharedTrip se llama de
+// nuevo y nadie ha tocado nada desde la última vez.
+const SHARED_SEEN_PREFIX = "shared_seen:";
+
 /**
  * Descarga la versión más reciente de un viaje ya compartido (por si
  * otro miembro ha hecho cambios) y sustituye sus datos locales.
+ * `changed` en la respuesta indica si de verdad había algo nuevo (para
+ * poder avisar sin repetir el aviso en cada sincronización silenciosa).
  */
 async function refreshSharedTrip(tripId) {
   try {
@@ -549,9 +557,17 @@ async function refreshSharedTrip(tripId) {
     const s = await ensureFirebase();
     const snap = await s.storeMod.getDoc(s.storeMod.doc(s.db, SHARED_COLLECTION, trip.share_code));
     if (!snap.exists()) return { ok: false, error: "El viaje compartido ya no existe en la nube." };
-    const payload = JSON.parse(snap.data().data);
+    const remote = snap.data();
+    const remoteUpdatedAt = remote.updatedAt && typeof remote.updatedAt.toMillis === "function" ? remote.updatedAt.toMillis() : null;
+    const seenKey = SHARED_SEEN_PREFIX + trip.share_code;
+    const lastSeen = await Data.settingGet(seenKey);
+    if (remoteUpdatedAt && lastSeen && remoteUpdatedAt <= lastSeen) {
+      return { ok: true, changed: false };
+    }
+    const payload = JSON.parse(remote.data);
     await applyRemoteTripUpdate(tripId, payload);
-    return { ok: true };
+    if (remoteUpdatedAt) await Data.settingSet(seenKey, remoteUpdatedAt);
+    return { ok: true, changed: true };
   } catch (err) {
     return { ok: false, error: friendlyAuthError(err) };
   }
@@ -599,7 +615,7 @@ async function refreshAllSharedTrips() {
     for (const trip of trips) {
       if (!trip.share_code) continue;
       const res = await refreshSharedTrip(trip.id);
-      if (res.ok) changed = true;
+      if (res.ok && res.changed) changed = true;
     }
     return changed;
   } catch (err) {
