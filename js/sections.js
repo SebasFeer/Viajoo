@@ -693,7 +693,7 @@ async function renderItinerary(trip) {
 
   if (!dates.length && !noDate.length) {
     const aiRow = isAiCopilotConfigured()
-      ? `<div class="ai-actions-row"><button class="btn btn-primary" id="ai-generate-empty">✨ Generar itinerario con IA (Pro)</button></div>`
+      ? `<div class="ai-actions-row"><button class="btn btn-primary" id="ai-generate-empty">✨ Generar itinerario con IA</button></div>`
       : "";
     section(aiRow + emptyState("📍", t("empty_itinerary_general")));
     setFab(fabBtn());
