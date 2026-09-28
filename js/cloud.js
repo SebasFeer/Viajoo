@@ -24,13 +24,17 @@ function ensureFirebase() {
 
   loadingPromise = (async () => {
     try {
-      const [{ initializeApp }, authMod, storeMod] = await Promise.all([
+      const [{ initializeApp, getApps }, authMod, storeMod] = await Promise.all([
         import(`${SDK_BASE}/firebase-app.js`),
         import(`${SDK_BASE}/firebase-auth.js`),
         import(`${SDK_BASE}/firebase-firestore.js`),
       ]);
 
-      const app = initializeApp(firebaseConfig);
+      // analytics.js puede haber inicializado ya la app (si la persona
+      // dio su consentimiento para estadísticas de uso antes de iniciar
+      // sesión) — reutilizarla en vez de llamar a initializeApp() otra
+      // vez, que lanzaría un error de "app ya existe".
+      const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
       const auth = authMod.getAuth(app);
       const db = storeMod.getFirestore(app);
 

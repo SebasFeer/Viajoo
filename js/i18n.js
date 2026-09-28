@@ -185,6 +185,7 @@ const T = {
   settings_language: { es: "Idioma", en: "Language", pt: "Idioma", zh: "语言", ar: "اللغة" },
   settings_notifications: { es: "Notificaciones", en: "Notifications", pt: "Notificações", zh: "通知", ar: "الإشعارات" },
   settings_security: { es: "Seguridad (PIN)", en: "Security (PIN)", pt: "Segurança (PIN)", zh: "安全（PIN 码）", ar: "الأمان (رمز PIN)" },
+  settings_analytics: { es: "Estadísticas de uso", en: "Usage statistics", pt: "Estatísticas de uso", zh: "使用统计", ar: "إحصاءات الاستخدام" },
   settings_dev: { es: "Modo desarrollador", en: "Developer mode", pt: "Modo desenvolvedor", zh: "开发者模式", ar: "وضع المطوّر" },
   settings_privacy: { es: "Legal", en: "Legal", pt: "Legal", zh: "法律信息", ar: "الشؤون القانونية" },
   settings_cache: { es: "Uso de caché", en: "Cache usage", pt: "Uso de cache", zh: "缓存使用情况", ar: "استخدام التخزين المؤقت" },
