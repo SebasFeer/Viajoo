@@ -28,6 +28,7 @@ import {
   joinSharedTrip,
   refreshSharedTrip,
   getIdToken,
+  syncOnLaunch,
 } from "./cloud.js";
 import { isPro, setPro } from "./pro.js";
 // TEMPORAL — interruptor de mock local del Copiloto IA, ver ai-copilot.js
@@ -395,11 +396,21 @@ function openMapsAppPicker(spec) {
 // ============================================================
 
 async function renderApp() {
+  // Guarda y restaura el scroll alrededor de CUALQUIER redibujado
+  // completo, no solo los de withTransition() (que ya lo hacía para
+  // las navegaciones manuales). En el arranque, main.js puede llamar
+  // a renderApp() varias veces seguidas sin pasar por withTransition
+  // (al confirmarse la sesión de Firebase, al llegar una sincronización
+  // más reciente de la nube...) — sin esto, cada una de esas llamadas
+  // sustituye toda la pantalla y el scroll vuelve a 0 de golpe, dando
+  // la sensación de que la app "salta" varias veces al recargar.
+  const scrollY = window.scrollY;
   if (state.tripId === null) {
     await renderHome();
   } else {
     await renderTripShell();
   }
+  window.scrollTo(0, scrollY);
 }
 
 // Recuerda hasta dónde se había bajado en cada pantalla (una entrada
@@ -3989,13 +4000,26 @@ export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, insta
 // DESLIZAR PARA RECARGAR (pull-to-refresh)
 // Solo se activa si el gesto empieza con la página ya arriba del
 // todo y no hay ningún modal abierto. Muestra un círculo girando en
-// la parte superior y, al soltar tras pasar el umbral, recarga la
-// página (como pedía el usuario).
+// la parte superior y, al soltar tras pasar el umbral, sincroniza
+// con la nube y vuelve a pintar la pantalla en el sitio.
+//
+// Antes esto hacía location.reload(), una recarga real de la
+// página: el arranque completo (main.js) se repetía desde cero
+// delante del usuario, que ya estaba viendo la app cargada. Como el
+// primer pintado ocurre antes de que Firebase confirme la sesión,
+// se veía brevemente el saludo genérico ("Buenos días") en vez del
+// suyo, y como el arranque puede volver a pintar la pantalla dos o
+// tres veces más (al confirmarse la sesión, al llegar la
+// sincronización), el usuario veía la pantalla "saltar" varias
+// veces seguidas. Al no navegar de verdad, evitamos ese vaivén: la
+// sesión ya está resuelta, así que solo hace falta una sincronización
+// y un único repintado.
 // ============================================================
 
 function installPullToRefresh() {
   const THRESHOLD = 70;
   const MAX_PULL = 100;
+  const MIN_SPIN_MS = 400;
 
   const indicator = document.createElement("div");
   indicator.className = "ptr-indicator";
@@ -4009,7 +4033,7 @@ function installPullToRefresh() {
 
   function reset() {
     pulling = false;
-    indicator.classList.remove("ptr-visible");
+    indicator.classList.remove("ptr-visible", "ptr-spinning");
     indicator.style.transform = "";
     ring.style.transform = "";
   }
@@ -4057,7 +4081,14 @@ function installPullToRefresh() {
         indicator.classList.add("ptr-visible", "ptr-spinning");
         indicator.style.transform = "translate(-50%, 14px)";
         ring.style.transform = "";
-        setTimeout(() => location.reload(), 350);
+        const wait = new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS));
+        Promise.all([syncOnLaunch().catch(() => false), wait])
+          .then(() => renderApp())
+          .catch(() => {})
+          .then(() => {
+            refreshing = false;
+            reset();
+          });
       } else {
         reset();
       }
