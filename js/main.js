@@ -1,4 +1,4 @@
-import { renderApp, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin } from "./app.js";
+import { renderApp, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin, notifySharedTripsUpdated } from "./app.js";
 import { guardOnLaunch, installBackgroundLock } from "./lock.js";
 import { onAuthChange, enableAutoSync, syncOnLaunch, completeGoogleRedirect } from "./cloud.js";
 import { shouldShowOnboarding, renderOnboarding } from "./onboarding.js";
@@ -74,7 +74,10 @@ completeGoogleRedirect().then((user) => {
   // que siempre se hace con lo que ya hay en local). Si trae datos
   // nuevos de otro dispositivo, se vuelve a pintar la pantalla.
   syncOnLaunch().then((updated) => {
-    if (updated) renderApp();
+    if (updated) {
+      renderApp();
+      notifySharedTripsUpdated();
+    }
   });
 });
 

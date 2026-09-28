@@ -49,6 +49,8 @@ import {
   flightSearchUrl,
   civitatisSearchUrl,
   quickBookGridHtml,
+  computeExpenseBalances,
+  simplifyExpenseDebts,
 } from "./sections.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon, brandMark, googleIcon } from "./icons.js";
@@ -3033,13 +3035,16 @@ async function openNotificationsSheet() {
       <h2 class="modal-title">Notificaciones</h2>
       <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
         Si las activas, la app te avisará <b>24 horas antes</b> de cada
-        vuelo (con la hora que hayas puesto) y <b>24 horas antes</b>
-        del check-in de cada hotel (con su hora si la indicaste, o a
-        las 14:00 si no). También avisa si tienes alguna actividad
-        programada para hoy. Se generan en este dispositivo, sin
-        servidor externo — eso sí, solo mientras tengas la app abierta
-        en una pestaña (los navegadores no dejan avisar en segundo
-        plano sin un servidor propio detrás).
+        vuelo, transporte (tren, bus, coche...) y reserva (hotel,
+        restaurante, entrada...), y si tienes alguna actividad
+        programada para hoy. También avisa <b>3 y 1 día antes</b> de
+        que empiece cada viaje, <b>2 días antes</b> si te quedan cosas
+        sin marcar en la maleta, si quedan <b>gastos sin saldar</b> al
+        terminar un viaje con acompañantes, y cuando alguien actualiza
+        un <b>viaje compartido</b> contigo. Se generan en este
+        dispositivo, sin servidor externo — eso sí, solo mientras
+        tengas la app abierta en una pestaña (los navegadores no dejan
+        avisar en segundo plano sin un servidor propio detrás).
       </p>
       ${permission === "unsupported" ? `<p style="color:var(--muted); font-size:13px;">Tu navegador no admite notificaciones.</p>` : ""}
       ${permission === "denied" ? `<p style="color:var(--rose); font-size:13px;">Están bloqueadas en el navegador. Actívalas desde los ajustes del sitio.</p>` : ""}
@@ -3160,10 +3165,16 @@ async function checkAndNotifyToday() {
     const trips = await Data.getAll("trips");
 
     for (const trip of trips) {
-      const [flights, hotels, itin] = await Promise.all([
+      const [flights, hotels, itin, transport, reservations, checklist, expenses, settlementRecords, companions] = await Promise.all([
         Data.getAllByTrip("flights", trip.id),
         Data.getAllByTrip("hotels", trip.id),
         Data.getAllByTrip("itinerary", trip.id),
+        Data.getAllByTrip("transport", trip.id),
+        Data.getAllByTrip("reservations", trip.id),
+        Data.getAllByTrip("checklist", trip.id),
+        Data.getAllByTrip("expenses", trip.id),
+        Data.getAllByTrip("settlements", trip.id),
+        Data.getAllByTrip("companions", trip.id),
       ]);
 
       // Vuelos: aviso 24 horas antes de la salida.
@@ -3240,12 +3251,82 @@ async function checkAndNotifyToday() {
           `📍 ${todayEvents.length} actividad(es) hoy en ${trip.destination}`
         );
       }
+
+      // Transporte (tren/bus/coche/barco...): mismo aviso de 24h antes
+      // que vuelos y hoteles.
+      for (const tRec of transport) {
+        const departure = combineDateTime(tRec.date, tRec.time, 9);
+        if (!isWithinLead(departure, FLIGHT_LEAD_HOURS)) continue;
+        const kind = (tRec.type || "Transporte").toLowerCase();
+        await fire(
+          `transport:${tRec.id}:24h`,
+          `🚗 Tu ${kind} (${trip.destination}) sale en 24 horas`
+        );
+      }
+
+      // Reservas (restaurantes, entradas...): aviso 24h antes de la
+      // hora reservada.
+      for (const r of reservations) {
+        const when = combineDateTime(r.date, r.time, 9);
+        if (!isWithinLead(when, HOTEL_RESERVATION_LEAD_HOURS)) continue;
+        await fire(
+          `reservation:${r.id}:24h`,
+          `🎟️ Tu reserva en ${r.name || trip.destination} empieza en 24 horas`
+        );
+      }
+
+      // Cuenta regresiva del viaje: avisa a 3 días y a 1 día del
+      // inicio, aunque no haya ningún vuelo u hotel cargado todavía.
+      const daysToStart = daysUntil(trip.start_date);
+      if (daysToStart === 3) {
+        await fire(`countdown:${trip.id}:3d`, `🧳 Faltan 3 días para tu viaje a ${trip.destination}`);
+      } else if (daysToStart === 1) {
+        await fire(`countdown:${trip.id}:1d`, `🧳 ¡Mañana empieza tu viaje a ${trip.destination}!`);
+      }
+
+      // Maleta: si a 2 días de salir quedan cosas sin marcar en la
+      // checklist, un único recordatorio (no se repite ese mismo viaje).
+      if (daysToStart === 2 && checklist.some((c) => !c.completed)) {
+        const pending = checklist.filter((c) => !c.completed).length;
+        await fire(
+          `checklist:${trip.id}:reminder`,
+          `🎒 Faltan 2 días para ${trip.destination}: tienes ${pending} cosa(s) sin marcar en la maleta`
+        );
+      }
+
+      // Gastos compartidos: si el viaje ya terminó y quedan cuentas
+      // sin saldar entre los acompañantes, un único recordatorio.
+      if (trip.end_date && today > trip.end_date) {
+        const balances = computeExpenseBalances(expenses, companions, settlementRecords);
+        const pendingSettlements = simplifyExpenseDebts(balances);
+        if (pendingSettlements.length) {
+          await fire(
+            `debts:${trip.id}`,
+            `💸 Tienes gastos sin saldar del viaje a ${trip.destination}`
+          );
+        }
+      }
     }
 
     if (changed) await Data.settingSet(NOTIFIED_SET_KEY, notified);
     if (flightStatusCacheChanged) await Data.settingSet(FLIGHT_STATUS_CACHE_KEY, flightStatusCache);
   } catch (err) {
     // sin permiso, sin soporte, o cualquier fallo: no pasa nada
+  }
+}
+
+/** Avisa cuando una sincronización (arranque o pull-to-refresh) trae
+ * cambios reales de un viaje compartido por otra persona. No hace
+ * ninguna llamada de red propia: solo reacciona a un `syncOnLaunch()`
+ * que ya se estaba haciendo por otro motivo, para no multiplicar las
+ * lecturas a Firestore. */
+async function notifySharedTripsUpdated() {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (!(await Data.settingGet(NOTIF_KEY))) return;
+    new Notification("Viajoo", { body: "🔄 Uno de tus viajes compartidos se ha actualizado" });
+  } catch (err) {
+    // sin permiso o cualquier fallo: no pasa nada
   }
 }
 
@@ -3994,7 +4075,7 @@ async function openProfileSheet() {
   });
 }
 
-export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin };
+export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin, notifySharedTripsUpdated };
 
 // ============================================================
 // DESLIZAR PARA RECARGAR (pull-to-refresh)
@@ -4083,7 +4164,10 @@ function installPullToRefresh() {
         ring.style.transform = "";
         const wait = new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS));
         Promise.all([syncOnLaunch().catch(() => false), wait])
-          .then(() => renderApp())
+          .then(([updated]) => {
+            if (updated) notifySharedTripsUpdated();
+            return renderApp();
+          })
           .catch(() => {})
           .then(() => {
             refreshing = false;

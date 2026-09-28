@@ -2829,4 +2829,6 @@ export {
   civitatisSearchUrl,
   quickBookGridHtml,
   wireQuickBookGrid,
+  computeExpenseBalances,
+  simplifyExpenseDebts,
 };
