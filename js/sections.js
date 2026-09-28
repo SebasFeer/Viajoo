@@ -2830,4 +2830,5 @@ export {
   wireQuickBookGrid,
   computeExpenseBalances,
   simplifyExpenseDebts,
+  classifyActivity,
 };
