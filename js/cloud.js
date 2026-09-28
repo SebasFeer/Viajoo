@@ -8,6 +8,7 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { Data, STORES, onDataChange } from "./db.js";
 import { LOGIN_ENDPOINT } from "./login-config.js";
+import { JOIN_TRIP_ENDPOINT, EMAIL_ACTION_QUOTA_ENDPOINT } from "./rate-limit-config.js";
 
 const SDK_BASE = "https://www.gstatic.com/firebasejs/12.19.0";
 
@@ -200,8 +201,34 @@ function friendlyAuthError(err) {
   return map[code] || NO_CONNECTION_MSG;
 }
 
+/** Comprueba (y reserva) el cupo diario por email para "signup" o
+ * "reset_password" contra la Cloud Function "checkEmailActionQuota"
+ * (ver rate-limit-config.js), ANTES de llamar al SDK de Firebase —
+ * así el límite es real por email y no se puede esquivar borrando
+ * datos locales. Si la función no está desplegada todavía (endpoint
+ * vacío), no bloquea nada: se comporta como si siempre hubiera cupo. */
+async function checkEmailActionQuota(action, email) {
+  if (!EMAIL_ACTION_QUOTA_ENDPOINT) return { allowed: true };
+  try {
+    const res = await fetch(EMAIL_ACTION_QUOTA_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, action }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 429) return { allowed: false, error: data.error };
+    if (!res.ok) return { allowed: true }; // fallo del servidor: no bloquear por un problema nuestro
+    return { allowed: true };
+  } catch (err) {
+    return { allowed: true }; // sin conexión con la Cloud Function: no bloquear, ya lo intentará Firebase Auth
+  }
+}
+
 async function signUp(email, password, displayName) {
   try {
+    const quota = await checkEmailActionQuota("signup", email);
+    if (!quota.allowed) return { user: null, error: quota.error };
+
     const s = await ensureFirebase();
     const cred = await s.authMod.createUserWithEmailAndPassword(s.auth, email, password);
     if (displayName) {
@@ -268,6 +295,9 @@ async function signInSecure(email, password) {
  * no, así no se puede usar para averiguar qué cuentas están
  * registradas. */
 async function resetPassword(email) {
+  const quota = await checkEmailActionQuota("reset_password", email);
+  if (!quota.allowed) return { ok: false, error: quota.error };
+
   try {
     const s = await ensureFirebase();
     await s.authMod.sendPasswordResetEmail(s.auth, email);
@@ -511,8 +541,17 @@ async function shareTrip(tripId) {
  * Se une a un viaje compartido a partir de su código: lo añade como
  * un viaje nuevo en tu lista, con su propio id local. Requiere tener
  * una cuenta.
+ *
+ * Pasa por la Cloud Function "joinSharedTrip" (ver rate-limit-config.js)
+ * en vez de leer/escribir Firestore directamente: así el cupo diario
+ * de intentos es real por cuenta (no se puede probar códigos en bucle
+ * borrando datos locales), y firestore.rules ya no necesita dejar leer
+ * el documento a nadie que no sea miembro todavía.
  */
 async function joinSharedTrip(code) {
+  if (!JOIN_TRIP_ENDPOINT) {
+    return { ok: false, error: "Unirse a un viaje compartido no está disponible ahora mismo." };
+  }
   try {
     const s = await ensureFirebase();
     const user = s.auth.currentUser;
@@ -521,20 +560,23 @@ async function joinSharedTrip(code) {
     const cleanCode = (code || "").trim().toUpperCase();
     if (!cleanCode) return { ok: false, error: "Introduce un código." };
 
-    const ref = s.storeMod.doc(s.db, SHARED_COLLECTION, cleanCode);
-    const snap = await s.storeMod.getDoc(ref);
-    if (!snap.exists()) return { ok: false, error: "No existe ningún viaje con ese código." };
+    const idToken = await user.getIdToken();
+    const res = await fetch(JOIN_TRIP_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ code: cleanCode }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || "No se pudo unir al viaje compartido." };
 
-    const payload = JSON.parse(snap.data().data);
+    const payload = data.payload;
     const { id, share_code, ...tripFields } = payload.trip;
     const newTripId = await Data.add("trips", { ...tripFields, share_code: cleanCode });
     await Data.replaceTripChildren(newTripId, payload);
 
-    await s.storeMod.updateDoc(ref, { members: s.storeMod.arrayUnion(user.uid) });
-
     return { ok: true, tripId: newTripId };
   } catch (err) {
-    return { ok: false, error: friendlyAuthError(err) };
+    return { ok: false, error: NO_CONNECTION_MSG };
   }
 }
 

@@ -689,3 +689,129 @@ exports.loginWithPassword = onRequest(
     }
   }
 );
+
+// ============================================================
+// UNIRSE A UN VIAJE COMPARTIDO — antes esto lo hacía el cliente
+// directamente contra Firestore (leer shared_trips/{code} y añadirse
+// a "members"), lo que dejaba dos huecos: cualquier cuenta podía
+// probar códigos de 6 caracteres sin ningún límite de intentos, y
+// firestore.rules tenía que permitir leer el documento a cualquier
+// usuario con sesión iniciada (aunque no fuera miembro todavía) para
+// que ese flujo funcionara. Ahora el Admin SDK hace la lectura y la
+// escritura aquí, con cupo diario por cuenta, y firestore.rules ya
+// solo deja leer/escribir a quien ya es miembro — nadie puede
+// "probar" códigos desde el cliente aunque tenga sesión iniciada.
+// ============================================================
+const JOIN_TRIP_DAILY_LIMIT = 2;
+
+async function reserveJoinTripQuota(uid) {
+  const today = todayUtcString();
+  const ref = admin.firestore().collection("join_trip_quota").doc(`${uid}_${today}`);
+  return admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = snap.exists ? snap.data().count || 0 : 0;
+    if (count >= JOIN_TRIP_DAILY_LIMIT) return { allowed: false };
+    tx.set(ref, { uid, date: today, count: count + 1 }, { merge: true });
+    return { allowed: true };
+  });
+}
+
+exports.joinSharedTrip = onRequest({ cors: true }, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Método no permitido." });
+      return;
+    }
+
+    const authHeader = req.get("Authorization") || "";
+    const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!idToken) {
+      res.status(401).json({ error: "Inicia sesión para unirte a un viaje compartido." });
+      return;
+    }
+    const decoded = await admin.auth().verifyIdToken(idToken);
+
+    const code = String((req.body || {}).code || "").trim().toUpperCase();
+    if (!code) {
+      res.status(400).json({ error: "Introduce un código." });
+      return;
+    }
+
+    const quota = await reserveJoinTripQuota(decoded.uid);
+    if (!quota.allowed) {
+      res.status(429).json({ error: `Has alcanzado el límite de ${JOIN_TRIP_DAILY_LIMIT} intentos de hoy. Inténtalo mañana.` });
+      return;
+    }
+
+    const ref = admin.firestore().collection("shared_trips").doc(code);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      res.status(404).json({ error: "No existe ningún viaje con ese código." });
+      return;
+    }
+
+    await ref.update({ members: admin.firestore.FieldValue.arrayUnion(decoded.uid) });
+
+    res.status(200).json({ payload: JSON.parse(snap.data().data) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error interno al unirse al viaje compartido." });
+  }
+});
+
+// ============================================================
+// CUPO DIARIO DE REGISTRO / RECUPERAR CONTRASEÑA — signUp y
+// resetPassword llaman al SDK de Firebase Auth directamente desde el
+// navegador (no hay contraseña que verificar aquí, así que no hace
+// falta un proxy completo como loginWithPassword). Pero sin ningún
+// tope, nada impide registrar cuentas en bucle o inundar el buzón de
+// alguien con emails de "recuperar contraseña". Esta función solo
+// comprueba y reserva cupo por email: el cliente la llama ANTES de
+// pedirle a Firebase que registre la cuenta o mande el email.
+// ============================================================
+const EMAIL_ACTION_DAILY_LIMIT = 2;
+const EMAIL_ACTIONS = ["signup", "reset_password"];
+
+async function reserveEmailActionQuota(action, email) {
+  const today = todayUtcString();
+  const key = normalizeEmailKey(email);
+  const ref = admin.firestore().collection("email_action_quota").doc(`${action}_${key}_${today}`);
+  return admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = snap.exists ? snap.data().count || 0 : 0;
+    if (count >= EMAIL_ACTION_DAILY_LIMIT) return { allowed: false };
+    tx.set(ref, { email: key, action, date: today, count: count + 1 }, { merge: true });
+    return { allowed: true };
+  });
+}
+
+exports.checkEmailActionQuota = onRequest({ cors: true }, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Método no permitido." });
+      return;
+    }
+
+    const email = String((req.body || {}).email || "").trim();
+    const action = String((req.body || {}).action || "");
+    if (!email || !isValidEmail(email)) {
+      res.status(400).json({ error: "El email no es válido." });
+      return;
+    }
+    if (!EMAIL_ACTIONS.includes(action)) {
+      res.status(400).json({ error: "Acción no reconocida." });
+      return;
+    }
+
+    const quota = await reserveEmailActionQuota(action, email);
+    if (!quota.allowed) {
+      res.status(429).json({ error: `Has alcanzado el límite de ${EMAIL_ACTION_DAILY_LIMIT} intentos de hoy. Inténtalo mañana.` });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error interno comprobando el límite." });
+  }
+});
