@@ -164,7 +164,7 @@ function confirmBox(text, okLabel = "Eliminar") {
 }
 
 /**
- * Ventana genérica para las herramientas (compartir, copiloto, divisas…).
+ * Ventana genérica para las herramientas (compartir, descubrir, divisas…).
  * html: contenido; onMount(root, close) para conectar eventos.
  * Devuelve { root, close }.
  */
@@ -474,8 +474,6 @@ const FEATURE_LINKS = {
   calendar: { tab: "calendar", label: "Calendario" },
   expenses: { tab: "expenses", label: "Gastos compartidos" },
   checklist: { tab: "checklist", label: "Checklist" },
-  "flight-status": { tab: "flights", label: "Estado de vuelo", flightStatus: true },
-  copilot: { tool: "copilot", label: "Copiloto IA" },
   share: { tool: "share", label: "Viajes compartidos" },
   discover: { tool: "discover", label: "Descubrir cerca" },
   currency: { tool: "currency", label: "Divisas" },
@@ -632,11 +630,10 @@ async function renderHome() {
         <span class="label">${firstName ? `Hola, ${esc(firstName)}` : "Tu cuenta"}</span>
         <h1>Mis viajes</h1>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" data-ai-trip type="button">✨ Planificar con IA</button><button class="btn btn-primary" data-new-trip type="button">+ Nuevo viaje</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" data-new-trip type="button">+ Nuevo viaje</button></div>
     </div>
     ${body}`;
   app.querySelectorAll("[data-new-trip]").forEach((b) => b.addEventListener("click", () => openTripForm()));
-  app.querySelectorAll("[data-ai-trip]").forEach((b) => b.addEventListener("click", async () => (await feature("copilot"))?.openNewTripAI(featureCtx())));
   trips.forEach(ensureTripPhoto);
 }
 
@@ -706,7 +703,6 @@ async function renderTrip(trip) {
       </div>
     </div>
     <div class="toolbar" role="toolbar" aria-label="Herramientas del viaje">
-      <button class="tool" type="button" data-tool="copilot"><span>✨</span>Copiloto IA</button>
       <button class="tool" type="button" data-tool="share"><span>🔗</span>Compartir</button>
       <button class="tool" type="button" data-tool="discover"><span>🧭</span>Descubrir cerca</button>
       <button class="tool" type="button" data-tool="currency"><span>💱</span>Divisas</button>
@@ -726,7 +722,6 @@ async function renderTrip(trip) {
     b.addEventListener("click", async () => {
       const ctx = featureCtx();
       const t = b.dataset.tool;
-      if (t === "copilot") (await feature("copilot"))?.openCopilot(trip, ctx);
       if (t === "share") (await feature("share"))?.openShare(trip, ctx);
       if (t === "discover") (await feature("discover"))?.openDiscover(trip, ctx);
       if (t === "currency") (await feature("currency"))?.openCurrency(trip, ctx);
@@ -861,19 +856,12 @@ function renderFlights(body, trip, L) {
               whenHtml(f.date, f.time),
               esc([f.origin, f.destination].filter(Boolean).join(" → ") || "Vuelo"),
               esc([f.airline, f.return_date ? `vuelta ${pretty(f.return_date)}` : "", f.notes].filter(Boolean).join(" · ")),
-              `<span class="mono">${esc(f.flight_number || "")}</span>${f.flight_number ? ` <button class="chip-btn sm" type="button" data-status="${f.id}">Estado</button>` : ""}`
+              `<span class="mono">${esc(f.flight_number || "")}</span>`
             )
           )
           .join("")}</div>`
       : emptyInline("Aún no hay vuelos en este viaje.", "flights", "Añadir vuelo"));
   wireRows(body, "flights", items);
-  body.querySelectorAll("[data-status]").forEach((b) =>
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const f = items.find((i) => String(i.id) === b.dataset.status);
-      if (f) (await feature("flight-status"))?.openFlightStatus(f, featureCtx());
-    })
-  );
 }
 
 // Misma búsqueda que la app (bookingSearchUrl en sections.js, #45).
@@ -1621,10 +1609,6 @@ async function openPendingFeature() {
   if (!trip) {
     history.replaceState(null, "", location.pathname);
     await render();
-    if (key === "copilot") {
-      (await feature("copilot"))?.openNewTripAI(featureCtx());
-      return;
-    }
     toast(`Crea tu primer viaje para usar «${cfg.label}»`);
     openTripForm(null, key);
     return;
@@ -1634,12 +1618,6 @@ async function openPendingFeature() {
   await render();
   window.scrollTo(0, 0);
   if (cfg.tool) $(`[data-tool="${cfg.tool}"]`, app)?.click();
-  if (cfg.flightStatus) {
-    // Abre el estado del primer vuelo con número; si no hay, explica qué falta.
-    const btn = $("[data-status]", app);
-    if (btn) btn.click();
-    else toast("Añade un vuelo con su número (p. ej. IB 3100) para consultar su estado.");
-  }
   if (cfg.highlight)
     cfg.highlight.forEach((t) => {
       const b = $(`[data-tool="${t}"]`, app);

@@ -12,7 +12,6 @@
 // ============================================================
 
 import { shareTrip, joinSharedTrip, refreshSharedTrip, refreshAllSharedTrips } from "../../../js/cloud.js";
-import { isPro } from "../../../js/pro.js";
 
 // Mismo prefijo que js/app.js (SHARE_QR_PREFIX) para que un QR hecho
 // en la web se pueda escanear desde la app y al revés.
@@ -52,10 +51,9 @@ function loadScript(src, globalName) {
   return scriptLoads.get(src);
 }
 
-// En la app: hasProAccess() = cuenta iniciada o modo Pro de pruebas.
-// En la web siempre hay sesión, pero se comprueba igual.
-async function hasAccess(ctx) {
-  return !!ctx.state.user || (await isPro());
+// En la web siempre hay sesión, pero se comprueba igual que en la app.
+function hasAccess(ctx) {
+  return !!ctx.state.user;
 }
 
 // ------------------------------------------------------------

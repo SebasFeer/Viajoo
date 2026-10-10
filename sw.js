@@ -2,7 +2,7 @@
 // abra incluso sin conexión (los datos ya viven en IndexedDB,
 // que no depende del service worker).
 
-const CACHE_NAME = "viajoo-v50";
+const CACHE_NAME = "viajoo-v51";
 
 // Caché de teselas del mapa: va SEPARADA a propósito y con nombre
 // fijo (sin número de versión de la app), para que sobreviva a las
@@ -28,13 +28,8 @@ const APP_SHELL = [
   "./js/geocode.js",
   "./js/discover.js",
   "./js/currency.js",
-  "./js/ai-copilot.js",
-  "./js/ai-copilot-config.js",
   "./js/cloud.js",
   "./js/firebase-config.js",
-  "./js/pro.js",
-  "./js/flightstatus.js",
-  "./js/flight-status-config.js",
   "./js/icons.js",
   "./js/photo.js",
   "./js/lock.js",

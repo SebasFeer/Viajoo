@@ -9,10 +9,9 @@ import {
   uid,
 } from "./utils.js";
 import { geocodeAll, routeBetween, optimizeRouteOrder } from "./geocode.js";
-import { state, root, h, toast, showFormModal, confirmAction, renderApp, withTransition, openDiscoverSheet, openMapsAppPicker, openRegisterInviteSheet, hasProAccess } from "./app.js";
+import { state, root, h, toast, showFormModal, confirmAction, renderApp, withTransition, openDiscoverSheet, openMapsAppPicker } from "./app.js";
 import { findDestinationPhoto } from "./photo.js";
 import { icon } from "./icons.js";
-import { isAiCopilotConfigured, openAiPlannerSheet } from "./ai-copilot.js";
 import { TOP_CURRENCIES, ALL_CURRENCIES, convertCurrency } from "./currency.js";
 import { t } from "./i18n.js";
 
@@ -692,15 +691,9 @@ async function renderItinerary(trip) {
   const dates = Object.keys(byDate).sort();
 
   if (!dates.length && !noDate.length) {
-    const aiRow = isAiCopilotConfigured()
-      ? `<div class="ai-actions-row"><button class="btn btn-primary" id="ai-generate-empty">✨ Generar itinerario con IA</button></div>`
-      : "";
-    section(aiRow + emptyState("📍", t("empty_itinerary_general")));
+    section(emptyState("📍", t("empty_itinerary_general")));
     setFab(fabBtn());
     document.getElementById("fab-add").addEventListener("click", () => openItineraryForm(trip));
-    document
-      .getElementById("ai-generate-empty")
-      ?.addEventListener("click", () => openAiPlannerSheet(trip, (updated) => renderItinerary(updated || trip)));
     return;
   }
 
@@ -751,29 +744,6 @@ async function renderItinerary(trip) {
       </div>
     </div>`;
 
-  const aiMeta = itinDayFilter !== "__nodate" ? trip.ai_plan?.byDate?.[itinDayFilter] : null;
-  const aiActionsHtml = isAiCopilotConfigured()
-    ? `<div class="ai-actions-row">
-         <button class="btn btn-ghost btn-sm" id="ai-generate-day">✨ Generar todo el itinerario</button>
-       </div>`
-    : "";
-  const aiRecosHtml =
-    aiMeta && aiMeta.restaurants && aiMeta.restaurants.length
-      ? `<div class="panel ai-day-card" style="margin-bottom:12px;">
-           <h3>🍽️ Recomendaciones de la IA para hoy</h3>
-           <div style="display:flex; flex-wrap:wrap; gap:6px;">
-             ${aiMeta.restaurants
-               .map(
-                 (r) =>
-                   `<span class="tag-chip" style="background:var(--cat-hotels-a); color:var(--cat-hotels);">${escapeHtml(
-                     r.name
-                   )}${r.priceRange ? ` · ${escapeHtml(r.priceRange)}` : ""}</span>`
-               )
-               .join(" ")}
-           </div>
-         </div>`
-      : "";
-
   function timelineRow(item, isLast) {
     const type = classifyActivity(item);
     return h`
@@ -805,7 +775,7 @@ async function renderItinerary(trip) {
         .join("")}</div>`
     : emptyState("📍", t("empty_itinerary_day"));
 
-  section(chipsHtml + bannerHtml + aiActionsHtml + aiRecosHtml + listHtml);
+  section(chipsHtml + bannerHtml + listHtml);
   setFab(fabBtn());
 
   wireTicketActions("itinerary", items, (item) => openItineraryForm(trip, item), (item) => openMapsAppPicker({ type: "point", location: item.location }));
@@ -816,9 +786,6 @@ async function renderItinerary(trip) {
       renderItinerary(trip);
     });
   });
-  document
-    .getElementById("ai-generate-day")
-    ?.addEventListener("click", () => openAiPlannerSheet(trip, (updated) => renderItinerary(updated || trip)));
   document.getElementById("fab-add").addEventListener("click", () =>
     openItineraryForm(trip, null, itinDayFilter !== "__nodate" ? itinDayFilter : null)
   );
@@ -1379,13 +1346,7 @@ async function renderExpenses(trip) {
   document.getElementById("fab-add").addEventListener("click", () => openExpenseForm(trip));
   const converterBtn = document.getElementById("open-currency-converter");
   if (converterBtn) {
-    converterBtn.addEventListener("click", async () => {
-      if (!(await hasProAccess())) {
-        openRegisterInviteSheet("El conversor de moneda requiere tener una cuenta.");
-        return;
-      }
-      openCurrencyConverterSheet(trip);
-    });
+    converterBtn.addEventListener("click", () => openCurrencyConverterSheet(trip));
   }
   const manageCompanionsBtn = document.getElementById("manage-companions");
   if (manageCompanionsBtn) {
@@ -1403,7 +1364,7 @@ async function renderExpenses(trip) {
 }
 
 // ------------------------------------------------------------
-// CONVERSOR DE MONEDA (Pro) — convierte un importe en otra moneda a
+// CONVERSOR DE MONEDA — convierte un importe en otra moneda a
 // euros, y opcionalmente lo pasa como gasto nuevo ya en EUR.
 // ------------------------------------------------------------
 
@@ -2033,10 +1994,6 @@ async function composeStaticMap(centerLat, centerLng, zoom, widthPx, heightPx, p
  * ni de que el Service Worker esté listo.
  */
 async function exportMapPdf(trip, located, dayLabel) {
-  if (!(await hasProAccess())) {
-    openRegisterInviteSheet("Guardar el mapa en PDF requiere tener una cuenta.");
-    return;
-  }
   if (!window.jspdf) {
     toast("No se pudo generar el PDF (falta cargar una librería). Revisa tu conexión y vuelve a intentarlo.");
     return;
@@ -2127,7 +2084,7 @@ async function exportMapPdf(trip, located, dayLabel) {
 }
 
 // ------------------------------------------------------------
-// ITINERARIO COMPLETO EN PDF (Pro) — genera un PDF de verdad con
+// ITINERARIO COMPLETO EN PDF — genera un PDF de verdad con
 // jsPDF: portada
 // con el nombre del viaje, y una sección con su propio color de
 // acento por tipo de dato (vuelos, hoteles, itinerario día a día,
@@ -2149,10 +2106,6 @@ const PDF_COLORS = {
 };
 
 async function exportItineraryPdf(trip) {
-  if (!(await hasProAccess())) {
-    openRegisterInviteSheet("Descargar el itinerario en PDF requiere tener una cuenta.");
-    return;
-  }
   if (!window.jspdf) {
     toast("No se pudo generar el PDF (falta cargar una librería). Revisa tu conexión y vuelve a intentarlo.");
     return;
@@ -2425,7 +2378,7 @@ async function renderMap(trip) {
     <p id="map-status" style="color:var(--muted); font-size:13px; margin:0 0 10px;">Localizando lugares…</p>
     <div id="map-route-toggle"></div>
     <div id="leaflet-map" style="height:46vh; border-radius:20px; overflow:hidden; box-shadow:var(--shadow-card);"></div>
-    <button class="btn btn-secondary" id="map-download-offline" style="width:100%; margin-top:10px;">${icon("download")} Guardar en PDF para sin conexión (Pro)</button>
+    <button class="btn btn-secondary" id="map-download-offline" style="width:100%; margin-top:10px;">${icon("download")} Guardar en PDF para sin conexión</button>
     <div id="map-list" style="margin-top:14px;"></div>
   `);
   setFab("");
@@ -2461,15 +2414,11 @@ async function renderMap(trip) {
   const toggleEl = document.getElementById("map-route-toggle");
   if (toggleEl) {
     toggleEl.innerHTML = canOptimize
-      ? `<button class="btn ${showOptimized ? "btn-primary" : "btn-secondary"}" id="map-route-optimize" style="width:100%; margin-bottom:10px;">${icon("compass")} ${showOptimized ? "Ruta óptima activada" : "Ordenar ruta por cercanía (Pro)"}</button>`
+      ? `<button class="btn ${showOptimized ? "btn-primary" : "btn-secondary"}" id="map-route-optimize" style="width:100%; margin-bottom:10px;">${icon("compass")} ${showOptimized ? "Ruta óptima activada" : "Ordenar ruta por cercanía"}</button>`
       : "";
     const optimizeBtn = document.getElementById("map-route-optimize");
     if (optimizeBtn) {
-      optimizeBtn.addEventListener("click", async () => {
-        if (!showOptimized && !(await hasProAccess())) {
-          openRegisterInviteSheet("Ordenar la ruta por cercanía requiere tener una cuenta.");
-          return;
-        }
+      optimizeBtn.addEventListener("click", () => {
         mapRouteMode = showOptimized ? "time" : "optimal";
         renderMap(trip);
       });

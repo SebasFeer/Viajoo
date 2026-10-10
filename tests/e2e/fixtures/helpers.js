@@ -42,16 +42,6 @@ export async function mockNotifications(page) {
   });
 }
 
-/** Activa el modo Pro de pruebas (Ajustes → Modo desarrollador), para
- * poder crear más de 2 viajes en un test sin que estorbe el límite del
- * plan gratis. */
-export async function enableTestProMode(page) {
-  await page.evaluate(async () => {
-    const { Data } = await import("/js/db.js");
-    await Data.settingSet("is_pro", true);
-  });
-}
-
 /** Crea un viaje desde la pantalla de inicio; deja al usuario en el
  * home (sale del viaje si el alta lo hubiera abierto). */
 export async function createTrip(page, { name, destination, startDate, endDate }) {

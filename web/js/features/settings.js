@@ -8,13 +8,10 @@
 //   Datos      -> openBackupSheet    (mismo JSON de Data.exportAll)
 //                 openCacheUsageSheet
 //   Legal      -> openLegalSheet     (aquí enlaza a legal.html#…)
-//   Avanzado   -> openDevModeSheet   (interruptor Pro de pruebas)
-// Se omiten a propósito (ver informe): idioma, notificaciones, PIN /
-// Face ID, y el mock del copiloto IA.
+// Se omiten a propósito (ver informe): idioma, notificaciones y PIN / Face ID.
 // ============================================================
 
 import { signOutUser, pushToCloud, pullFromCloud } from "../../../js/cloud.js";
-import { isPro, setPro } from "../../../js/pro.js";
 import { daysBetween, download } from "../../../js/utils.js";
 
 // Misma clave y mismos valores que js/app.js (THEME_KEY): como la web
@@ -40,7 +37,6 @@ const TABS = [
   { id: "appearance", label: "Apariencia" },
   { id: "data", label: "Datos" },
   { id: "legal", label: "Legal" },
-  { id: "advanced", label: "Avanzado" },
 ];
 
 // Mismo orden y títulos que openLegalSheet; los id son los de
@@ -52,7 +48,6 @@ const LEGAL_LINKS = [
   ["propiedad-intelectual", "Propiedad intelectual"],
   ["cookies", "Cookies y almacenamiento local"],
   ["contacto", "Contacto y reclamaciones"],
-  ["suscripcion", "Condiciones de suscripción Pro"],
   ["licencias", "Licencias de terceros"],
 ];
 
@@ -85,7 +80,7 @@ export async function openSettings(ctx, opts = {}) {
           b.setAttribute("aria-selected", String(on));
         });
         panel.innerHTML = `<p class="muted small">Cargando…</p>`;
-        const renderers = { account: renderAccount, profile: renderProfile, appearance: renderAppearance, data: renderData, legal: renderLegal, advanced: renderAdvanced };
+        const renderers = { account: renderAccount, profile: renderProfile, appearance: renderAppearance, data: renderData, legal: renderLegal };
         await renderers[id](panel, ctx, { close, show });
       };
       root.querySelectorAll("[data-stg-tab]").forEach((b) => b.addEventListener("click", () => show(b.dataset.stgTab)));
@@ -417,33 +412,3 @@ function openContactForm(ctx) {
   });
 }
 
-// ------------------------------------------------------------
-// Avanzado: estado de las funciones de cuenta + interruptor Pro de
-// pruebas (openDevModeSheet)
-// ------------------------------------------------------------
-async function renderAdvanced(panel, ctx, { show }) {
-  const { toast } = ctx;
-  const pro = await isPro();
-  panel.innerHTML = `
-    <h3 class="stg-h stg-h-first">Estado de tu cuenta</h3>
-    <div class="stg-item stg-item-solo">
-      <div><b>${ctx.state.user ? "Funciones de cuenta activas" : "Sin cuenta"}</b>
-        <span class="muted small">Compartir viajes, copiloto IA, avisos de vuelo, conversor de moneda, PDF y viajes ilimitados. Por ahora no se cobra nada.</span></div>
-      <span class="stg-badge ${ctx.state.user ? "on" : ""}">${ctx.state.user ? "Activas" : "Inactivas"}</span>
-    </div>
-    <h3 class="stg-h">Modo desarrollador</h3>
-    <p class="muted small">Interruptor temporal para probar las funciones Pro (compartir
-      viaje, avisos de vuelo, copiloto de IA, ordenar ruta, viajes
-      ilimitados...) sin tener todavía cobros de verdad integrados.
-      Cuando se active el pago real, esto se sustituirá por la
-      confirmación de la compra.</p>
-    <div class="stg-item stg-item-solo">
-      <div><b>Modo Pro (pruebas)</b><span class="muted small">${pro ? "Activado en este navegador" : "Desactivado"}</span></div>
-      <button class="btn ${pro ? "btn-danger" : "btn-primary"} btn-sm" type="button" id="stg-pro">${pro ? "🧪 Desactivar modo Pro" : "🧪 Activar modo Pro (pruebas)"}</button>
-    </div>`;
-  panel.querySelector("#stg-pro").addEventListener("click", async () => {
-    await setPro(!pro);
-    toast(!pro ? "Modo Pro activado" : "Modo Pro desactivado");
-    show("advanced");
-  });
-}
