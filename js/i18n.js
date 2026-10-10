@@ -7,10 +7,10 @@
 // estados vacíos, tarjetas del resumen del viaje, botones comunes
 // (Guardar/Cancelar/Cerrar/Editar/Eliminar) — que es lo que se ve
 // en todo momento sin importar en qué viaje/sección estés. Los
-// campos de cada formulario (añadir vuelo, hotel, gasto...), el
-// copiloto IA, el estado de vuelos y el texto legal de privacidad
-// siguen solo en español por ahora — traducirlos también es un
-// trabajo mucho más grande, para una siguiente pasada.
+// campos de cada formulario (añadir vuelo, hotel, gasto...) y el
+// texto legal de privacidad siguen solo en español por ahora —
+// traducirlos también es un trabajo mucho más grande, para una
+// siguiente pasada.
 // ============================================================
 
 import { Data } from "./db.js";

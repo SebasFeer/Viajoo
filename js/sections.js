@@ -936,9 +936,8 @@ function quickBookGridHtml(title) {
 
 /** `container` acota la búsqueda de los botones a ese elemento (nunca
  * a todo el document): el mismo grid puede aparecer más de una vez
- * en el DOM a la vez (p. ej. dentro de un modal de IA abierto sobre
- * la propia pestaña de Reservas), y buscar por id en todo el
- * documento conectaría los clics con el grid equivocado. */
+ * en el DOM a la vez, y buscar por id en todo el documento conectaría
+ * los clics con el grid equivocado. */
 function wireQuickBookGrid(container, trip) {
   container.querySelector("#qb-hotels")?.addEventListener("click", () => window.open(bookingSearchUrl(trip), "_blank", "noopener"));
   container.querySelector("#qb-flights")?.addEventListener("click", () => window.open(flightSearchUrl(trip), "_blank", "noopener"));
