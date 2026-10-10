@@ -28,19 +28,8 @@ import {
   shareTrip,
   joinSharedTrip,
   refreshSharedTrip,
-  getIdToken,
   syncOnLaunch,
 } from "./cloud.js";
-import { isPro, setPro } from "./pro.js";
-// TEMPORAL — interruptor de mock local del Copiloto IA, ver ai-copilot.js
-import {
-  isAiCopilotMockEnabled,
-  setAiCopilotMockEnabled,
-  getAiCopilotMockUrl,
-  setAiCopilotMockUrl,
-  openAiNewTripSheet,
-} from "./ai-copilot.js";
-import { getFlightStatus, isFlightStatusConfigured } from "./flightstatus.js";
 import {
   renderSection,
   exportItineraryPdf,
@@ -1016,7 +1005,7 @@ function openTripMenu(trip) {
           ? `<div class="modal-actions"><button class="btn btn-secondary" id="mn-refresh-share">${icon("refresh")} Actualizar desde la nube</button></div>`
           : ""
       }
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-pdf">${icon("download")} Itinerario en PDF (Pro)</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="mn-pdf">${icon("download")} Itinerario en PDF</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-ics">${icon("calendar")} Exportar a calendario (.ics)</button></div>
       <div class="modal-actions"><button class="btn btn-danger" id="mn-delete">${icon("trash")} Eliminar viaje</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="mn-close">Cerrar</button></div>
@@ -1246,15 +1235,12 @@ async function openDiscoverSheet(trip) {
 }
 
 // ------------------------------------------------------------
-// COMPARTIR VIAJE (Pro) — genera/renueva un código y lo enseña
-// listo para copiar/enviar a quien quieras invitar.
+// COMPARTIR VIAJE — genera/renueva un código y lo enseña listo para
+// copiar/enviar a quien quieras invitar. Requiere cuenta porque el
+// viaje compartido se guarda en Firestore bajo tu usuario.
 // ------------------------------------------------------------
 
 async function openShareTripSheet(trip) {
-  if (!(await hasProAccess())) {
-    openRegisterInviteSheet("Compartir viajes con otras personas requiere tener una cuenta.");
-    return;
-  }
   if (!currentUser()) {
     toast("Inicia sesión primero en Ajustes → Mi cuenta");
     return;
@@ -1432,14 +1418,12 @@ async function openQrScannerSheet(onResult) {
 }
 
 // ------------------------------------------------------------
-// UNIRSE A UN VIAJE COMPARTIDO (Pro) — desde Ajustes.
+// UNIRSE A UN VIAJE COMPARTIDO — desde Ajustes. Requiere cuenta
+// porque la Cloud Function que gestiona el código identifica al
+// usuario por su sesión.
 // ------------------------------------------------------------
 
 async function openJoinTripSheet() {
-  if (!(await hasProAccess())) {
-    openRegisterInviteSheet("Unirte a un viaje compartido requiere tener una cuenta.");
-    return;
-  }
   if (!currentUser()) {
     toast("Inicia sesión primero en Ajustes → Mi cuenta");
     return;
@@ -1625,14 +1609,6 @@ async function renderHome() {
         <input type="search" id="trip-search" placeholder="${t("search_placeholder")}" autocomplete="off" />
       </div>
       <div class="search-suggestions" id="trip-search-suggestions"></div>
-      <button class="ai-plan-cta" id="btn-ai-plan-trip">
-        <span class="ai-plan-cta-art">✨</span>
-        <span class="ai-plan-cta-text">
-          <strong>${t("ai_plan_title")}</strong>
-          <span>${t("ai_plan_subtitle")}</span>
-        </span>
-        <span class="ai-plan-cta-arrow">${icon("chevron")}</span>
-      </button>
     </div>
     <div class="view has-tabbar">
       <div id="destination-search"></div>
@@ -1755,7 +1731,6 @@ async function renderHome() {
 
   root.querySelector("#fab-new-trip").addEventListener("click", () => openTripForm());
   root.querySelector("#btn-settings").addEventListener("click", () => openSettingsSheet());
-  root.querySelector("#btn-ai-plan-trip").addEventListener("click", () => openAiNewTripSheet());
   // Accesos rápidos de reserva externa — a diferencia del conversor de
   // moneda, son gratis para todo el mundo, con o sin cuenta. Sin un
   // viaje concreto (estamos en el inicio), usan lo que se haya
@@ -1769,13 +1744,7 @@ async function renderHome() {
     const destination = searchEl.value.trim();
     window.open(destination ? civitatisSearchUrl({ destination }) : "https://www.civitatis.com/es/", "_blank", "noopener");
   });
-  root.querySelector("#btn-currency-converter").addEventListener("click", async () => {
-    if (!(await hasProAccess())) {
-      openRegisterInviteSheet("El conversor de moneda requiere tener una cuenta.");
-      return;
-    }
-    openCurrencyConverterSheet();
-  });
+  root.querySelector("#btn-currency-converter").addEventListener("click", () => openCurrencyConverterSheet());
 
   // Fotos reales del destino: se buscan en segundo plano (no bloquean
   // el primer pintado) y se guardan en el viaje para no tener que
@@ -1808,11 +1777,7 @@ async function renderHome() {
  * Búsqueda de destino desde el buscador del inicio: geocodifica el
  * texto y sugiere alojamientos y lugares de interés cercanos (datos
  * abiertos de OpenStreetMap/Wikipedia, igual que "Descubre"), con un
- * botón para añadir directamente ese destino como viaje nuevo. Más
- * sugerencias quedan como mejora de pago (Pro), igual que el resto
- * de funciones Pro de la app. (Ordenar la ruta por cercanía es otra
- * función Pro, pero vive en la sección Mapa de cada viaje — ver
- * optimizeRouteOrder en geocode.js — no aquí en el buscador.)
+ * botón para añadir directamente ese destino como viaje nuevo.
  */
 async function runDestinationSearch(query, container, knownCoords) {
   if (!container) return;
@@ -1839,13 +1804,9 @@ async function runDestinationSearch(query, container, knownCoords) {
     return;
   }
 
-  const pro = await hasProAccess();
-  const hotelLimit = pro ? 6 : 3;
-  const poiLimit = pro ? 10 : 5;
-
   const [hotels, attractions] = await Promise.all([
-    nearbyLodging(coords.lat, coords.lng, { limit: hotelLimit }),
-    nearbyAttractions(coords.lat, coords.lng, { limit: poiLimit }),
+    nearbyLodging(coords.lat, coords.lng, { limit: 6 }),
+    nearbyAttractions(coords.lat, coords.lng, { limit: 10 }),
   ]);
 
   const hotelsHtml = hotels.length
@@ -1893,11 +1854,6 @@ async function runDestinationSearch(query, container, knownCoords) {
       <p class="dest-search-label" style="margin-top:12px;">${icon("compass", "stat-icon")} Lugares de interés</p>
       <div class="dest-result-list">${poiHtml}</div>
       <button class="hero-cta" id="dest-search-add" style="margin-top:14px;">＋ Agregar "${escapeHtml(query)}" a mi lista</button>
-      ${
-        pro
-          ? ""
-          : `<button class="dest-search-pro" id="dest-search-pro">🔒 Ver más sugerencias — función Pro</button>`
-      }
     </div>`;
 
   const closeBtn = container.querySelector("#dest-search-close");
@@ -1911,12 +1867,6 @@ async function runDestinationSearch(query, container, knownCoords) {
     });
   }
 
-  const proBtn = container.querySelector("#dest-search-pro");
-  if (proBtn) {
-    proBtn.addEventListener("click", () => {
-      openRegisterInviteSheet("Ver más sugerencias de destinos requiere tener una cuenta.");
-    });
-  }
 }
 
 async function collectUpcomingEvents(trips) {
@@ -1954,167 +1904,7 @@ async function collectUpcomingEvents(trips) {
   return events.slice(0, 3);
 }
 
-// El plan gratis deja crear hasta este número de viajes; a partir de
-// ahí, hace falta Pro (viajes ilimitados). Los viajes ya creados
-// nunca se bloquean ni se ocultan, solo la creación de uno nuevo.
-const FREE_TRIP_LIMIT = 2;
-
-// ------------------------------------------------------------
-// ACCESO A FUNCIONES QUE REQUIEREN CUENTA — algunas funciones
-// (compartir viaje, copiloto de IA, avisos de vuelo...) piden tener
-// una cuenta creada, sin que esto tenga que ver con ningún cobro: es
-// solo para llevar la cuenta de quién las usa. El interruptor de
-// Ajustes → Modo desarrollador sigue funcionando aparte, como atajo
-// para probar sin tener que crear una cuenta.
-// ------------------------------------------------------------
-
-async function hasProAccess() {
-  return !!currentUser() || (await isPro());
-}
-
-// ------------------------------------------------------------
-// LÍMITE DE CONSULTAS DE PAGO — el Copiloto de IA y los avisos de
-// estado de vuelo, a diferencia del resto de funciones con cuenta,
-// llaman a APIs externas de pago desde la Cloud Function (Claude,
-// AeroDataBox). Cada cuenta puede usarlas PAID_QUERY_LIMIT veces AL
-// DÍA; al intentarlo una vez más se avisa de que las consultas
-// ilimitadas llegarán con la futura suscripción.
-//
-// El contador de aquí abajo es solo un espejo local (Data.settingGet/
-// Set, con la fecha de hoy en la clave para que se reinicie solo cada
-// día) pensado para no abrir formularios/hacer una llamada de red que
-// ya sabemos que va a fallar. La cuenta que de verdad manda vive en
-// Firestore, junto al UID, dentro de la propia Cloud Function
-// (reserveDailyQuota en functions/index.js): por eso el tope no se
-// puede esquivar usando otro dispositivo o borrando los datos locales
-// — si el servidor rechaza la llamada por límite (ver
-// syncPaidQueryLimitReached), este espejo local se pone al día.
-// ------------------------------------------------------------
-
-const PAID_QUERY_LIMIT = 2;
-
-function paidQueryCountKey(feature) {
-  const uid = currentUser()?.uid || "anon";
-  return `paid_query_count_${feature}_${uid}_${todayString()}`;
-}
-
-async function getPaidQueryCount(feature) {
-  const raw = await Data.settingGet(paidQueryCountKey(feature));
-  return typeof raw === "number" ? raw : 0;
-}
-
-async function bumpPaidQueryCount(feature) {
-  const count = (await getPaidQueryCount(feature)) + 1;
-  await Data.settingSet(paidQueryCountKey(feature), count);
-  return count;
-}
-
-/** El servidor ha rechazado una llamada por haberse agotado el cupo
- * diario de esta cuenta (posiblemente consumido desde otro
- * dispositivo): pone el espejo local al día, sin más. */
-async function markPaidQueryLimitReached(feature) {
-  await Data.settingSet(paidQueryCountKey(feature), PAID_QUERY_LIMIT);
-}
-
-/** Igual que markPaidQueryLimitReached, pero además muestra el aviso
- * — para cuando el rechazo ocurre en primer plano, en respuesta
- * directa a algo que acaba de tocar la persona. */
-async function syncPaidQueryLimitReached(feature, reasonText) {
-  await markPaidQueryLimitReached(feature);
-  openPaidQueryLimitSheet(reasonText);
-}
-
-function openPaidQueryLimitSheet(reasonText) {
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Límite diario alcanzado</h2>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6;">
-        ${escapeHtml(reasonText || `Ya usaste tus ${PAID_QUERY_LIMIT} consultas gratis de hoy para esta función.`)}
-      </p>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6;">
-        Muy pronto podrás tener consultas ilimitadas con una suscripción.
-      </p>
-      <div class="modal-actions"><button class="btn btn-primary" id="paid-limit-close">Entendido</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#paid-limit-close").addEventListener("click", () => overlay.remove());
-}
-
-/** Comprueba si aún quedan consultas gratis para `feature` ("ai" o
- * "flight"); si no quedan, muestra el aviso y devuelve false. No
- * consume ninguna consulta por sí sola: eso se hace aparte con
- * bumpPaidQueryCount(), justo tras completarse la llamada real. */
-async function checkPaidQueryLimit(feature, reasonText) {
-  const count = await getPaidQueryCount(feature);
-  if (count >= PAID_QUERY_LIMIT) {
-    openPaidQueryLimitSheet(reasonText);
-    return false;
-  }
-  return true;
-}
-
-// ------------------------------------------------------------
-// VENTANA DE REGISTRO — reemplaza a los simples toasts de "esto
-// necesita cuenta" allí donde tiene sentido detenerse un momento a
-// explicar qué se gana, en vez de solo avisar y seguir. Solo se
-// muestra cuando falta iniciar sesión (ver hasProAccess): si ya hay
-// cuenta, esta ventana ni se llega a abrir. No menciona "Pro" ni
-// ningún cobro — de momento no se cobra nada por nada de esto.
-// ------------------------------------------------------------
-
-const ACCOUNT_FEATURES_LIST = [
-  "Viajes ilimitados (el plan gratis permite hasta 2 a la vez)",
-  "Compartir viajes con código o QR",
-  `Copiloto de viajes con IA (${PAID_QUERY_LIMIT} usos gratis al día)`,
-  `Avisos de estado de vuelo (${PAID_QUERY_LIMIT} usos gratis al día)`,
-  "Ordenar la ruta del mapa por cercanía",
-  "Conversor de moneda",
-  "Guardar el mapa y el itinerario en PDF",
-];
-
-function openRegisterInviteSheet(reasonText) {
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Regístrate para usar esta función</h2>
-      ${reasonText ? `<p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">${escapeHtml(reasonText)}</p>` : ""}
-      <p style="color:var(--muted); font-size:13px; line-height:1.6;">
-        Estas son algunas de las funciones que se desbloquean al registrarte:
-      </p>
-      <div class="panel" style="margin-top:4px;">
-        ${ACCOUNT_FEATURES_LIST.map(
-          (f) =>
-            `<p style="font-size:13.5px; margin:7px 0; display:flex; gap:8px; align-items:flex-start;"><span style="color:var(--brand); flex-shrink:0;">✓</span><span>${escapeHtml(f)}</span></p>`
-        ).join("")}
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" id="register-invite-cta">Crear cuenta / Iniciar sesión</button>
-      </div>
-      <div class="modal-actions"><button class="btn btn-ghost" id="register-invite-close">Ahora no</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#register-invite-close").addEventListener("click", () => overlay.remove());
-  overlay.querySelector("#register-invite-cta").addEventListener("click", () => {
-    overlay.remove();
-    renderAuthForm();
-  });
-}
-
 async function openTripForm(trip, prefill) {
-  if (!trip) {
-    const trips = await Data.getAll("trips");
-    if (trips.length >= FREE_TRIP_LIMIT && !(await hasProAccess())) {
-      openRegisterInviteSheet(`El plan gratis permite tener hasta ${FREE_TRIP_LIMIT} viajes a la vez.`);
-      return;
-    }
-  }
   showFormModal({
     title: trip ? "Editar viaje" : "Nuevo viaje",
     initial: trip || prefill || null,
@@ -2218,7 +2008,7 @@ function openBackupSheet() {
   });
 }
 
-export { state, root, h, toast, refresh, showFormModal, confirmAction, renderApp, openTripForm, withTransition, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, openDiscoverSheet, openMapsAppPicker, openRegisterInviteSheet, hasProAccess, PAID_QUERY_LIMIT, checkPaidQueryLimit, bumpPaidQueryCount, openPaidQueryLimitSheet, syncPaidQueryLimitReached };
+export { state, root, h, toast, refresh, showFormModal, confirmAction, renderApp, openTripForm, withTransition, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, openDiscoverSheet, openMapsAppPicker };
 
 // ============================================================
 // SEGURIDAD — PIN de bloqueo local
@@ -2675,7 +2465,6 @@ function openSettingsSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="st-profile">${icon("luggage")} ${t("settings_profile")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-join-shared">${icon("link")} ${t("settings_join_shared")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-config">${icon("settings")} ${t("settings_config")}</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="st-dev">${icon("flask")} ${t("settings_dev")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-cache">${icon("cloud")} ${t("settings_cache")}</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="st-close">${t("common_close")}</button></div>
     </div>`;
@@ -2690,7 +2479,6 @@ function openSettingsSheet() {
   go("#st-profile", openProfileSheet);
   go("#st-join-shared", openJoinTripSheet);
   go("#st-config", openConfigSheet);
-  go("#st-dev", openDevModeSheet);
   go("#st-cache", openCacheUsageSheet);
 }
 
@@ -2875,91 +2663,6 @@ async function openCacheUsageSheet() {
   });
 }
 
-// ------------------------------------------------------------
-// MODO DESARROLLADOR — interruptor de "Pro" mientras se construyen
-// esas funciones sin tener montado ningún cobro real todavía.
-// ------------------------------------------------------------
-
-async function openDevModeSheet() {
-  const pro = await isPro();
-  const aiMock = isAiCopilotMockEnabled();
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Modo desarrollador</h2>
-      <p style="color:var(--muted); font-size:12.5px; line-height:1.6;">
-        Interruptor temporal para probar las funciones Pro (compartir
-        viaje, avisos de vuelo, copiloto de IA, ordenar ruta, viajes
-        ilimitados...) sin tener todavía cobros de verdad integrados.
-        Cuando se active el pago real, esto se sustituirá por la
-        confirmación de la compra.
-      </p>
-      <div class="modal-actions" style="margin-top:8px;">
-        <button class="btn ${pro ? "btn-danger" : "btn-primary"}" id="dev-pro-toggle">
-          ${pro ? "🧪 Desactivar modo Pro" : "🧪 Activar modo Pro (pruebas)"}
-        </button>
-      </div>
-      <p style="color:var(--muted); font-size:12.5px; line-height:1.6; margin-top:14px;">
-        🤖 <b>Copiloto IA — mock local (TEMPORAL):</b> con esto activado,
-        "Generar con IA" usa un servidor de ejemplo
-        (js/mock-ai-copilot-server.js) en vez de tu Cloud Function real,
-        para probar la interfaz sin gastar créditos de la API.
-        ${aiMock ? `URL actual: <code>${escapeHtmlDev(getAiCopilotMockUrl())}</code>.` : ""}
-        Si vas a probar desde el móvil contra la app publicada,
-        pon aquí la URL de un túnel (ngrok, etc.) que apunte a tu
-        ordenador, no "localhost". Quítalo cuando ya no lo necesites.
-      </p>
-      <div class="modal-actions">
-        <button class="btn ${aiMock ? "btn-danger" : "btn-secondary"}" id="dev-ai-mock-toggle">
-          ${aiMock ? "🤖 Desactivar mock del Copiloto IA" : "🤖 Activar mock del Copiloto IA (dev)"}
-        </button>
-      </div>
-      ${aiMock ? `<div class="modal-actions"><button class="btn btn-secondary" id="dev-ai-mock-url">${icon("link")} Cambiar URL del mock</button></div>` : ""}
-      <div class="modal-actions"><button class="btn btn-ghost" id="dev-close">Cerrar</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#dev-close").addEventListener("click", () => overlay.remove());
-  overlay.querySelector("#dev-pro-toggle").addEventListener("click", async () => {
-    await setPro(!pro);
-    toast(!pro ? "Modo Pro activado" : "Modo Pro desactivado");
-    overlay.remove();
-  });
-  overlay.querySelector("#dev-ai-mock-toggle").addEventListener("click", () => {
-    if (!aiMock) {
-      const url = prompt(
-        "URL del mock (usa la de tu túnel ngrok si vas a probar desde el móvil; deja la de localhost si pruebas solo desde este ordenador):",
-        getAiCopilotMockUrl()
-      );
-      if (url === null) return; // canceló
-      setAiCopilotMockUrl(url.trim());
-    }
-    setAiCopilotMockEnabled(!aiMock);
-    toast(!aiMock ? "Mock del Copiloto IA activado" : "Mock del Copiloto IA desactivado");
-    overlay.remove();
-  });
-  const urlBtn = overlay.querySelector("#dev-ai-mock-url");
-  if (urlBtn) {
-    urlBtn.addEventListener("click", () => {
-      const url = prompt("Nueva URL del mock:", getAiCopilotMockUrl());
-      if (url === null) return;
-      setAiCopilotMockUrl(url.trim());
-      toast("URL del mock actualizada");
-      overlay.remove();
-    });
-  }
-}
-
-// Pequeño escape de texto local para no depender de otro módulo aquí.
-function escapeHtmlDev(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 /**
  * Abre un sub-panel de Ajustes ocultando temporalmente `parentOverlay`
  * (el menú principal) en vez de cerrarlo. En cuanto ya no quede
@@ -3050,15 +2753,7 @@ async function openThemeSheet() {
 // ------------------------------------------------------------
 
 const NOTIF_KEY = "notifications_enabled";
-const FLIGHT_ALERTS_KEY = "flight_alerts_enabled";
 const NOTIFIED_SET_KEY = "notified_reminders";
-// Este chequeo se repite cada 15 minutos mientras un vuelo esté
-// dentro de las 24h previas a su salida (ver checkAndNotifyToday);
-// sin guardar el resultado, cada repaso volvería a gastar una de las
-// PAID_QUERY_LIMIT consultas gratis del vuelo. Se guarda una vez por
-// vuelo (incluido "no se encontró nada") y se reutiliza el resto de
-// repasos de esas mismas 24 horas.
-const FLIGHT_STATUS_CACHE_KEY = "flight_status_query_cache";
 
 const FLIGHT_LEAD_HOURS = 24;
 const HOTEL_RESERVATION_LEAD_HOURS = 24;
@@ -3072,10 +2767,6 @@ async function openNotificationsSheet() {
   const enabledRaw = await Data.settingGet(NOTIF_KEY);
   const enabled = enabledRaw === true || enabledRaw === 1;
   const permission = "Notification" in window ? Notification.permission : "unsupported";
-
-  const pro = await hasProAccess();
-  const flightAlertsRaw = await Data.settingGet(FLIGHT_ALERTS_KEY);
-  const flightAlertsOn = flightAlertsRaw === true || flightAlertsRaw === 1;
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -3103,34 +2794,11 @@ async function openNotificationsSheet() {
           ${enabled ? "🔕 Desactivar notificaciones" : "🔔 Activar notificaciones"}
         </button>
       </div>
-      <div class="field-check" style="margin-top:14px;">
-        <input type="checkbox" id="flight-alerts-check" ${flightAlertsOn ? "checked" : ""} />
-        <label for="flight-alerts-check" style="margin:0;">✈️ Avisos de estado de vuelo (Pro)</label>
-      </div>
-      <p style="color:var(--muted); font-size:12px; line-height:1.5;">
-        ${
-          pro
-            ? `Añade el retraso y la puerta de embarque a los avisos de hoy, cuando estén disponibles (${PAID_QUERY_LIMIT} usos gratis al día por cuenta; luego, próximamente por suscripción).`
-            : "Función Pro — regístrate para activarla."
-        }
-      </p>
       <div class="modal-actions"><button class="btn btn-ghost" id="notif-close">Cerrar</button></div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
   overlay.querySelector("#notif-close").addEventListener("click", () => overlay.remove());
-
-  const flightCheck = overlay.querySelector("#flight-alerts-check");
-  flightCheck.addEventListener("change", async () => {
-    if (!pro) {
-      flightCheck.checked = false;
-      overlay.remove();
-      openRegisterInviteSheet("Los avisos de estado de vuelo requieren tener una cuenta.");
-      return;
-    }
-    await Data.settingSet(FLIGHT_ALERTS_KEY, flightCheck.checked);
-    toast(flightCheck.checked ? "Avisos de vuelo activados" : "Avisos de vuelo desactivados");
-  });
 
   overlay.querySelector("#notif-toggle").addEventListener("click", async () => {
     if (enabled) {
@@ -3196,13 +2864,7 @@ async function checkAndNotifyToday() {
     if (!enabled) return;
 
     const notified = await getNotifiedSet();
-    const flightAlertsOn = await Data.settingGet(FLIGHT_ALERTS_KEY);
-    const useFlightStatus = flightAlertsOn && (await hasProAccess()) && isFlightStatusConfigured();
-    const flightStatusCacheRaw = await Data.settingGet(FLIGHT_STATUS_CACHE_KEY);
-    const flightStatusCache = flightStatusCacheRaw && typeof flightStatusCacheRaw === "object" ? flightStatusCacheRaw : {};
-    let idToken = null;
     let changed = false;
-    let flightStatusCacheChanged = false;
 
     async function fire(key, body) {
       if (notified[key]) return;
@@ -3232,53 +2894,9 @@ async function checkAndNotifyToday() {
         const departure = combineDateTime(f.date, f.time, 9);
         if (!isWithinLead(departure, FLIGHT_LEAD_HOURS)) continue;
 
-        let extra = "";
-        if (useFlightStatus && f.flight_number) {
-          const cacheKey = String(f.id);
-          if (cacheKey in flightStatusCache) {
-            const info = flightStatusCache[cacheKey];
-            if (info) {
-              if (info.delayMin > 0) extra += ` · retraso de ${info.delayMin} min`;
-              if (info.gate) extra += ` · puerta ${info.gate}`;
-            }
-          } else if ((await getPaidQueryCount("flight")) >= PAID_QUERY_LIMIT) {
-            // Sin ventana emergente (esto corre en segundo plano, cada
-            // 15 min): un aviso único en el mismo canal de
-            // notificaciones que el resto.
-            await fire(
-              "paidlimit:flight",
-              `✈️ Límite de ${PAID_QUERY_LIMIT} avisos de vuelo con datos en vivo alcanzado hoy. Consultas ilimitadas próximamente con la suscripción.`
-            );
-          } else {
-            if (!idToken) idToken = await getIdToken();
-            if (idToken) {
-              const info = await getFlightStatus(f.flight_number, f.date, idToken);
-              if (info && info.limitReached) {
-                // El límite lo acaba de imponer el servidor (por
-                // ejemplo, ya se gastó desde otro dispositivo hoy):
-                // se sincroniza el espejo local y se avisa una vez,
-                // sin marcar este vuelo en caché (mañana vuelve a
-                // haber cupo y se reintenta solo).
-                await markPaidQueryLimitReached("flight");
-                await fire(
-                  "paidlimit:flight",
-                  `✈️ Límite de ${PAID_QUERY_LIMIT} avisos de vuelo con datos en vivo alcanzado hoy. Consultas ilimitadas próximamente con la suscripción.`
-                );
-              } else {
-                flightStatusCache[cacheKey] = info || null;
-                flightStatusCacheChanged = true;
-                await bumpPaidQueryCount("flight");
-                if (info) {
-                  if (info.delayMin > 0) extra += ` · retraso de ${info.delayMin} min`;
-                  if (info.gate) extra += ` · puerta ${info.gate}`;
-                }
-              }
-            }
-          }
-        }
         await fire(
           `flight:${f.id}:24h`,
-          `✈️ Tu vuelo ${f.flight_number || ""} (${trip.destination}) sale en 24 horas${extra}`
+          `✈️ Tu vuelo ${f.flight_number || ""} (${trip.destination}) sale en 24 horas`
         );
       }
 
@@ -3359,7 +2977,6 @@ async function checkAndNotifyToday() {
     }
 
     if (changed) await Data.settingSet(NOTIFIED_SET_KEY, notified);
-    if (flightStatusCacheChanged) await Data.settingSet(FLIGHT_STATUS_CACHE_KEY, flightStatusCache);
   } catch (err) {
     // sin permiso, sin soporte, o cualquier fallo: no pasa nada
   }
@@ -3443,8 +3060,7 @@ async function checkBirthday() {
 // ============================================================
 // LEGAL — aviso legal (LSSI), privacidad y protección de datos,
 // términos de uso, propiedad intelectual, cookies, contacto y
-// reclamaciones, condiciones de suscripción, y licencias de
-// terceros. Todo bajo Ajustes → Legal.
+// reclamaciones, y licencias de terceros. Todo bajo Ajustes → Legal.
 //
 // Los datos identificativos del titular (nombre, DNI/NIF, domicilio,
 // email de contacto) van entre corchetes como [PLACEHOLDER]: hay que
@@ -3484,11 +3100,9 @@ DNI/NIF: [DNI/NIF]
 Domicilio: [DOMICILIO]
 Correo de contacto: contacto@viajoo.es
 
-Por ahora Viajoo es una aplicación personal en fase de
-desarrollo y pruebas, sin actividad económica real todavía: la
-función Pro no cobra nada mientras tanto (ver "Condiciones de
-suscripción"). Si eso cambia, este aviso se actualizará con los datos
-de actividad económica que correspondan.
+Por ahora Viajoo es una aplicación personal gratuita, sin
+actividad económica real. Si eso cambia, este aviso se actualizará
+con los datos de actividad económica que correspondan.
 
 2. Objeto
 Viajoo es una aplicación web (PWA) para organizar viajes:
@@ -3497,10 +3111,9 @@ relacionado, guardado principalmente en el propio dispositivo de
 quien la usa.
 
 3. Condiciones de acceso y uso
-El acceso a Viajoo es gratuito, salvo por las funciones
-marcadas como "Pro" (ver Condiciones de suscripción). Usar la
-aplicación implica aceptar este Aviso Legal, los Términos y
-Condiciones de Uso, y la Política de Privacidad.
+El acceso a Viajoo es gratuito. Usar la aplicación implica
+aceptar este Aviso Legal, los Términos y Condiciones de Uso, y la
+Política de Privacidad.
 
 4. Legislación aplicable y fuero
 Estas condiciones se rigen por la legislación española. Para
@@ -3530,9 +3143,9 @@ Si creas una cuenta (con email y contraseña, o con tu cuenta de Google),
 tus datos se guardan también en Firebase (Google) bajo tu usuario, para
 poder recuperarlos en otro dispositivo. Puedes cerrar sesión y eliminar tu
 cuenta cuando quieras. Las funciones básicas siguen funcionando sin
-cuenta, de forma 100% local; las funciones Pro, en cambio, sí piden tener
-una cuenta creada (gratuita, sin ningún cobro todavía) — ver Condiciones
-de suscripción Pro.
+cuenta, de forma 100% local; algunas funciones concretas (viajes
+compartidos, conversor de moneda, ordenar ruta, exportar a PDF), en
+cambio, sí piden tener una cuenta creada — gratuita, sin ningún cobro.
 
 3. Servicios externos que puede consultar la app
 Para mostrar mapas, calcular rutas, encontrar fotos e imágenes reales de
@@ -3550,20 +3163,7 @@ puntuales, en cada visita el navegador carga las tipografías de la app
 revela tu dirección IP a Google mientras descarga la fuente (ver también
 Cookies y almacenamiento local).
 
-4. Copiloto de viajes con IA (función Pro)
-Al generar un itinerario con IA, el destino, las fechas y las preferencias
-que escribes se envían a una función de servidor propia (Cloud Function),
-que a su vez se los pasa a la API de Anthropic (Claude) para redactar la
-propuesta. Solo viaja lo que escribes en ese formulario, nunca el resto de
-tus datos guardados; la respuesta no se usa para nada más que mostrarte el
-itinerario generado.
-
-5. Avisos de estado de vuelo (función Pro)
-Si activas esta función, el número de vuelo y la fecha se envían a una
-función de servidor propia, que consulta AeroDataBox/RapidAPI para conocer
-retrasos y puerta de embarque. Estos datos no pasan por ningún otro sitio.
-
-6. Viajes compartidos (función Pro)
+4. Viajes compartidos
 Si compartes un viaje con un código de 6 dígitos (o su QR, que solo
 contiene ese mismo código), sus datos (vuelos, hoteles, itinerario...)
 se guardan en un documento de Firestore accesible por quienes tengan
@@ -3574,12 +3174,12 @@ dispositivo solo mientras la ventana de escaneo está abierta: ese
 vídeo nunca se guarda ni se envía a ningún sitio, solo se analiza en
 el propio dispositivo para leer el código.
 
-7. Notificaciones
+5. Notificaciones
 Si activas los avisos, se generan en tu propio dispositivo a partir de tus
 datos guardados localmente. No implican el envío de información a
 servidores externos.
 
-8. Exportar a PDF o al calendario del dispositivo
+6. Exportar a PDF o al calendario del dispositivo
 El PDF del itinerario y el archivo .ics para el calendario se generan
 enteramente en tu dispositivo, a partir de tus datos guardados, y solo
 cuando tú pulsas el botón correspondiente — nunca en automático ni en
@@ -3587,14 +3187,14 @@ segundo plano. El archivo .ics no se sincroniza con nada por su cuenta:
 tienes que abrirlo tú mismo con tu app de calendario (Google Calendar,
 Apple Calendar...) para decidir qué añadir.
 
-9. PIN y desbloqueo biométrico
+7. PIN y desbloqueo biométrico
 El PIN es opcional y, si lo activas, se guarda cifrado (hash) únicamente en
 tu dispositivo. Si además activas Face ID/huella como atajo, la
 verificación la hace tu propio sistema operativo: la app nunca recibe ni
 guarda tu huella o tu cara, solo la confirmación de que el gesto se
 completó. Nadie más que tú puede ver ni recuperar tu PIN.
 
-10. Estadísticas de uso y publicidad
+8. Estadísticas de uso y publicidad
 Viajoo no muestra publicidad dentro de la app. Sí incluye Google
 Analytics para medir el uso (qué pantallas se abren, qué funciones se
 usan), pero apagado por defecto: solo se activa si tú mismo lo
@@ -3604,7 +3204,7 @@ actives, no se carga nada de Google Analytics ni se manda ningún
 dato. Nunca incluye tus viajes, gastos ni nada de lo que guardas
 dentro de la app — ver más detalle en Cookies y almacenamiento local.
 
-11. Base legal y conservación de tus datos
+9. Base legal y conservación de tus datos
 Tratamos tus datos para prestarte el servicio que pides (organizar tus
 viajes) y, cuando das tu consentimiento expreso, para funciones
 opcionales concretas (copia en la nube, PIN, biometría, notificaciones,
@@ -3612,7 +3212,7 @@ viajes compartidos). Tus datos se conservan mientras mantengas la app
 instalada y, si tienes cuenta, hasta que la elimines o nos pidas que
 la borremos.
 
-12. Tus derechos
+10. Tus derechos
 Tienes derecho a acceder, rectificar, suprimir, limitar y oponerte al
 tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
@@ -3622,18 +3222,17 @@ que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
-13. Transferencias internacionales
-Firebase (Google) y Anthropic pueden tratar datos en servidores fuera
-del Espacio Económico Europeo, acogidos a las garantías que exige el
-RGPD (cláusulas contractuales tipo u otro mecanismo equivalente que
-ofrezca cada proveedor).
+11. Transferencias internacionales
+Firebase (Google) puede tratar datos en servidores fuera del Espacio
+Económico Europeo, acogido a las garantías que exige el RGPD (cláusulas
+contractuales tipo u otro mecanismo equivalente).
 
-14. Menores de edad
+12. Menores de edad
 Viajoo no está dirigida a menores de 14 años. Si eres menor de
 edad, necesitas el consentimiento de tus padres o tutores para crear
 una cuenta o activar funciones que impliquen guardar datos en la nube.
 
-15. Contacto
+13. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
 contacto@viajoo.es.
 `.trim();
@@ -3664,7 +3263,7 @@ Te comprometes a usar Viajoo de forma lícita, sin:
 - Usar la función de compartir viajes para distribuir contenido
   ilegal, ofensivo o que infrinja derechos de terceros.
 - Interferir con el funcionamiento de la app o de los servicios de
-  terceros que consulta (mapas, tipos de cambio, IA...).
+  terceros que consulta (mapas, tipos de cambio...).
 
 5. Contenido que introduces tú
 Los datos de tus viajes (destinos, notas, fotos que subas si lo haces...)
@@ -3674,7 +3273,7 @@ otro fin. Ver también Propiedad intelectual.
 
 6. Disponibilidad del servicio
 Viajoo depende en parte de servicios externos gratuitos (mapas,
-tipos de cambio, geocodificación, IA...) que pueden fallar o dejar de
+tipos de cambio, geocodificación...) que pueden fallar o dejar de
 estar disponibles sin previo aviso; la app está pensada para seguir
 funcionando con lo que ya tengas guardado localmente aunque eso pase.
 No garantizamos que el servicio esté disponible de forma
@@ -3689,10 +3288,10 @@ aceptas.
 8. Limitación de responsabilidad
 Viajoo se ofrece "tal cual". Dentro de lo que permite la ley, no
 respondemos de decisiones de viaje que tomes basándote en datos de la
-app (tipos de cambio, estado de vuelos, itinerarios generados por
-IA...) ni de fallos de los servicios externos que consulta. Revisa
-siempre la información importante (horarios de vuelo, tipos de cambio,
-reservas) con la fuente oficial antes de viajar.
+app (tipos de cambio, horarios, distancias...) ni de fallos de los
+servicios externos que consulta. Revisa siempre la información
+importante (horarios de vuelo, tipos de cambio, reservas) con la
+fuente oficial antes de viajar.
 
 9. Terminación
 Puedes dejar de usar la app y borrar tus datos cuando quieras (Ajustes
@@ -3762,8 +3361,7 @@ propios del navegador, que solo esta app puede leer y que nunca se
 envían a ningún sitio salvo que actives tú la copia en la nube:
 - IndexedDB: tus viajes, vuelos, hoteles, gastos, itinerario, y el
   resto de contenido que creas dentro de la app.
-- localStorage: ajustes sueltos (por ejemplo, si el modo "Pro" de
-  pruebas está activado, o la URL de un mock de desarrollo).
+- localStorage: ajustes sueltos (por ejemplo, el tema claro/oscuro).
 Puedes borrar todo esto en cualquier momento desde los ajustes de tu
 navegador ("borrar datos del sitio"), o desde Ajustes → Copiar /
 restaurar datos dentro de la app.
@@ -3809,10 +3407,6 @@ contacto@viajoo.es.
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
 - Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
-- Si eres consumidor de la Unión Europea y la reclamación es sobre una
-  compra Pro (cuando exista cobro real), acudir a la plataforma
-  europea de resolución de litigios en línea:
-  https://ec.europa.eu/consumers/odr
 - Si la reclamación es sobre el tratamiento de tus datos personales,
   puedes acudir a la Agencia Española de Protección de Datos
   (www.aepd.es).
@@ -3821,56 +3415,6 @@ reclamación formal, puedes:
 Al ser un proyecto personal, procuramos responder en un plazo
 razonable, aunque no podemos garantizar un tiempo fijo mientras no
 haya un equipo de soporte dedicado.
-`.trim();
-
-const SUBSCRIPTION_TERMS_TEXT = `
-Última actualización: ${new Date().getFullYear()}
-
-1. Estado actual: sin cobro real, pero con registro obligatorio
-Viajoo Pro está todavía en fase de pruebas: no hay ningún
-sistema de pago real integrado. Mientras esto sea así, lo único que
-hace falta para usar una función Pro es tener una cuenta creada
-(gratis, con email o con Google) — no hay ningún cargo. Pedimos el
-registro para llevar la cuenta de quién usa estas funciones mientras
-se termina de integrar un cobro de verdad; estas condiciones se
-aplican de forma orientativa para cuando eso ocurra.
-
-Dos de estas funciones (el copiloto de viajes con IA y los avisos de
-estado de vuelo) tienen un coste real por cada consulta a un servicio
-externo, así que además del registro tienen un límite de 2 usos
-gratis por cuenta AL DÍA. Al superarlo, se avisa de que las consultas
-ilimitadas llegarán con la futura suscripción.
-
-2. Qué incluye Pro (cuando se active el cobro real)
-Viajes ilimitados, compartir viajes, avisos de estado de vuelo,
-copiloto de IA, ordenar rutas por cercanía, conversor de moneda y
-exportar en PDF — la lista completa se muestra siempre en la ventana
-de suscripción dentro de la app.
-
-3. Precio y forma de pago
-Todavía por definir. El precio, la periodicidad (mensual/anual) y el
-método de pago se anunciarán con claridad antes de pedir ningún dato
-de pago. No se cobrará nada sin tu confirmación expresa.
-
-4. Cancelación
-Podrás cancelar la suscripción cuando quieras desde la propia app o
-desde la plataforma de pago que se use llegado el momento (por
-ejemplo, el sistema de suscripciones de Google Play o de la App
-Store, si la app llega a distribuirse por ahí). Cancelar detiene la
-renovación, pero no siempre da derecho a devolución del periodo ya
-pagado (se explicará en el momento de la compra).
-
-5. Derecho de desistimiento
-Si compras Pro como persona consumidora dentro de la Unión Europea,
-dispondrás de 14 días naturales para desistir de la compra sin
-justificar el motivo, salvo que hayas empezado a usar el contenido
-digital de pago con tu consentimiento expreso y renunciando a ese
-derecho (algo que se pedirá de forma clara y separada, nunca escondido
-en la letra pequeña).
-
-6. Cambios en el precio o en las funciones Pro
-Si en el futuro cambia el precio o qué incluye Pro, se avisará con
-antelación razonable a quienes ya tengan una suscripción activa.
 `.trim();
 
 const THIRD_PARTY_LICENSES_TEXT = `
@@ -3921,7 +3465,6 @@ function openLegalSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-cookies">${icon("settings")} Cookies y almacenamiento local</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact">${icon("bell")} Contacto y reclamaciones</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-contact-form">✉️ Enviar un mensaje</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="lg-subscription">${icon("wallet")} Condiciones de suscripción Pro</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="lg-licenses">${icon("link")} Licencias de terceros</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="lg-close">${t("common_close")}</button></div>
     </div>`;
@@ -3942,7 +3485,6 @@ function openLegalSheet() {
   overlay.querySelector("#lg-contact-form").addEventListener("click", () => {
     openSubSheet(overlay, openContactFormSheet);
   });
-  go("#lg-subscription", "Condiciones de suscripción Pro", SUBSCRIPTION_TERMS_TEXT);
   go("#lg-licenses", "Licencias de terceros", THIRD_PARTY_LICENSES_TEXT);
 }
 

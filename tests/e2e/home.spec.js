@@ -5,14 +5,9 @@ test.beforeEach(async ({ page }) => {
   await mockCloud(page, { loggedIn: false });
 });
 
-test("el CTA de planificar no menciona 'IA' ni 'Pro'", async ({ page }) => {
+test("la pantalla principal no tiene CTA de IA (copiloto retirado)", async ({ page }) => {
   await openApp(page);
-  const cta = page.locator("#btn-ai-plan-trip");
-  await expect(cta).toBeVisible();
-  const text = (await cta.textContent()) || "";
-  expect(text).not.toMatch(/\bIA\b/);
-  expect(text).not.toMatch(/\bPro\b/);
-  expect(text).toContain("¿Planificamos tu viaje?");
+  await expect(page.locator("#btn-ai-plan-trip")).toHaveCount(0);
 });
 
 test("la reserva rápida (Hotel/Vuelo/Actividades) está en la pantalla principal", async ({ page }) => {
