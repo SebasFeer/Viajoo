@@ -553,7 +553,6 @@ function headerUser() {
       <div class="menu" id="menu" role="menu" hidden>
         <div class="who"><span class="label">Sesión iniciada</span><b>${esc(u.displayName || "")}</b><span class="muted small">${esc(u.email || "")}</span></div>
         <button type="button" data-act="settings" role="menuitem">⚙️ Ajustes</button>
-        <button type="button" data-act="join" role="menuitem">🔗 Unirme a un viaje compartido</button>
         <button type="button" data-act="sync" role="menuitem">⟳ Sincronizar ahora</button>
         <a href="./" role="menuitem">Ir a la web de Viajoo</a>
         <a href="legal.html#privacidad" role="menuitem">Privacidad</a>
@@ -584,7 +583,6 @@ function headerUser() {
       toast("Sesión cerrada");
     }
     if (act === "settings") (await feature("settings"))?.openSettings(featureCtx());
-    if (act === "join") (await feature("share"))?.openJoin(featureCtx());
     if (act === "sync") {
       toast("Sincronizando…");
       const res = await pullOrPush();
@@ -669,7 +667,7 @@ function tripPass(trip, counts, firstFlight) {
           <div><span class="label">Vuelta</span><b class="mono">${esc(pretty(trip.end_date))}</b></div>
           <div><span class="label">Días</span><b class="mono">${tripDays(trip) ?? "—"}</b></div>
         </div>
-        <div class="chips">${chips}${trip.share_code ? `<span class="chip" style="--accent:var(--brand)"><i></i>Compartido</span>` : ""}</div>
+        <div class="chips">${chips}</div>
       </div>
       <div class="pass-stub">
         <div class="countdown ${status}"><span class="label">${lbl}</span><b>${esc(big)}</b><span class="muted small">${esc(small)}</span></div>
@@ -703,7 +701,6 @@ async function renderTrip(trip) {
       </div>
     </div>
     <div class="toolbar" role="toolbar" aria-label="Herramientas del viaje">
-      <button class="tool" type="button" data-tool="share"><span>🔗</span>Compartir</button>
       <button class="tool" type="button" data-tool="discover"><span>🧭</span>Descubrir cerca</button>
       <button class="tool" type="button" data-tool="currency"><span>💱</span>Divisas</button>
       <button class="tool" type="button" data-tool="pdf"><span>📄</span>Exportar PDF</button>
@@ -722,7 +719,6 @@ async function renderTrip(trip) {
     b.addEventListener("click", async () => {
       const ctx = featureCtx();
       const t = b.dataset.tool;
-      if (t === "share") (await feature("share"))?.openShare(trip, ctx);
       if (t === "discover") (await feature("discover"))?.openDiscover(trip, ctx);
       if (t === "currency") (await feature("currency"))?.openCurrency(trip, ctx);
       if (t === "pdf") (await feature("export"))?.exportPdf(trip, ctx);
@@ -1673,8 +1669,7 @@ async function start() {
   }, 9000);
 }
 
-// Cualquier cambio en los datos (también los que llegan por sincronización
-// de viajes compartidos) vuelve a pintar la pantalla.
+// Cualquier cambio en los datos vuelve a pintar la pantalla.
 onDataChange(() => render());
 
 start();

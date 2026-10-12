@@ -4,23 +4,14 @@ rules_version = '2';
 // firestore.rules — Reglas de seguridad de Viajoo.
 //
 // Reflejan exactamente lo que usa cloud.js hoy:
-//   - users/{uid}         -> copia de seguridad íntegra del usuario
-//   - shared_trips/{code} -> un viaje compartido por código de 6 caracteres
+//   - users/{uid} -> copia de seguridad íntegra del usuario
 //
 // paid_query_usage/*, contact_message_quota/*, contact_messages/*,
-// login_lockouts/*, join_trip_quota/* y email_action_quota/*
-// (contadores/colas usados por functions/index.js) NO tienen regla
-// propia a propósito: caen en el bloqueo por defecto de más abajo,
-// así ningún cliente puede leerlos ni tocarlos directamente — solo el
-// Admin SDK de las Cloud Functions, que no pasa por estas reglas.
-//
-// Nota sobre "Pro": hoy el plan gratuito/premium se controla solo en
-// el cliente (pro.js, guardado local). Estas reglas NO comprueban el
-// plan porque el cliente puede mentir sobre ello; si en el futuro el
-// plan se guarda también en el documento del usuario (p. ej. un campo
-// "plan" en users/{uid}), se puede añadir aquí una comprobación real
-// de "isPro" leyendo ese documento antes de permitir crear/actualizar
-// en shared_trips.
+// login_lockouts/* y email_action_quota/* (contadores/colas usados
+// por functions/index.js) NO tienen regla propia a propósito: caen en
+// el bloqueo por defecto de más abajo, así ningún cliente puede
+// leerlos ni tocarlos directamente — solo el Admin SDK de las Cloud
+// Functions, que no pasa por estas reglas.
 // ============================================================
 
 service cloud.firestore {
@@ -30,35 +21,6 @@ service cloud.firestore {
     // Solo el propio usuario puede leer o escribir su documento.
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // --- Viajes compartidos (shareTrip / joinSharedTrip) ---
-    // Unirse a un viaje (probar un código de 6 caracteres) ya NO pasa
-    // por aquí: lo hace la Cloud Function "joinSharedTrip" con el
-    // Admin SDK (que no pasa por estas reglas), con un cupo diario de
-    // intentos por cuenta. Por eso el cliente solo puede leer/escribir
-    // un shared_trips si YA es miembro — nadie puede usar el propio
-    // cliente para probar códigos sin límite, aunque tenga sesión
-    // iniciada.
-    match /shared_trips/{code} {
-
-      allow read: if request.auth != null && request.auth.uid in resource.data.members;
-
-      // Crear un viaje compartido: solo puedes crearlo como su dueño,
-      // y tienes que aparecer ya como primer miembro.
-      allow create: if request.auth != null
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.members is list
-        && request.auth.uid in request.resource.data.members;
-
-      // Actualizar: solo quien ya es miembro (dueño u otro invitado),
-      // subiendo cambios del viaje (pushSharedTripIfNeeded /
-      // refreshSharedTrip). Añadir un miembro nuevo (unirse) solo lo
-      // hace la Cloud Function de más arriba.
-      allow update: if request.auth != null && request.auth.uid in resource.data.members;
-
-      // Borrar un viaje compartido: solo el dueño original.
-      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
     }
 
     // Cualquier otra ruta queda bloqueada por defecto.

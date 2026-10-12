@@ -116,10 +116,6 @@ async function renderAccount(panel, ctx, { close }) {
         <div><b>Forzar descarga ahora</b><span class="muted small">Sustituye los datos de este navegador por los de la nube.</span></div>
         <button class="btn btn-secondary btn-sm" type="button" id="stg-pull">Descargar</button>
       </div>
-      <div class="stg-item">
-        <div><b>Viajes compartidos</b><span class="muted small">Únete a un viaje con el código o el QR que te han pasado.</span></div>
-        <button class="btn btn-secondary btn-sm" type="button" id="stg-join">🔗 Unirme</button>
-      </div>
     </div>
     <div class="stg-foot">
       <button class="btn btn-danger btn-sm" type="button" id="stg-logout">Cerrar sesión</button>
@@ -145,14 +141,6 @@ async function renderAccount(panel, ctx, { close }) {
       toast("Todavía no hay ninguna copia en la nube");
     } else {
       toast(res.error);
-    }
-  });
-  panel.querySelector("#stg-join").addEventListener("click", async () => {
-    close();
-    try {
-      (await import("./share.js")).openJoin(ctx);
-    } catch (e) {
-      toast("No se pudo cargar esta función (revisa tu conexión)");
     }
   });
   panel.querySelector("#stg-logout").addEventListener("click", async () => {

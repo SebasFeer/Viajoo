@@ -1,5 +1,5 @@
 import { Data, DEFAULT_CHECKLIST_ITEMS } from "./db.js";
-import { isAnalyticsConfigured, hasAnalyticsConsent, setAnalyticsConsent, track } from "./analytics.js";
+import { track } from "./analytics.js";
 import {
   money,
   todayString,
@@ -25,9 +25,6 @@ import {
   cloudHasBackup,
   saveBirthDate,
   getBirthDate,
-  shareTrip,
-  joinSharedTrip,
-  refreshSharedTrip,
   syncOnLaunch,
 } from "./cloud.js";
 import {
@@ -993,18 +990,7 @@ function openTripMenu(trip) {
     <div class="modal-sheet">
       <div class="modal-handle"></div>
       <h2 class="modal-title">${escapeHtml(trip.destination)}</h2>
-      ${
-        trip.share_code
-          ? `<p style="color:var(--muted); font-size:12.5px; margin-top:-10px;">${icon("link", "stat-icon")} Viaje compartido · código ${escapeHtml(trip.share_code)}</p>`
-          : ""
-      }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-edit">${icon("edit")} Editar viaje</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="mn-share">${icon("link")} Compartir viaje</button></div>
-      ${
-        trip.share_code
-          ? `<div class="modal-actions"><button class="btn btn-secondary" id="mn-refresh-share">${icon("refresh")} Actualizar desde la nube</button></div>`
-          : ""
-      }
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-pdf">${icon("download")} Itinerario en PDF</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="mn-ics">${icon("calendar")} Exportar a calendario (.ics)</button></div>
       <div class="modal-actions"><button class="btn btn-danger" id="mn-delete">${icon("trash")} Eliminar viaje</button></div>
@@ -1017,24 +1003,6 @@ function openTripMenu(trip) {
     overlay.remove();
     openTripForm(trip);
   });
-  overlay.querySelector("#mn-share").addEventListener("click", async () => {
-    overlay.remove();
-    await openShareTripSheet(trip);
-  });
-  const refreshBtn = overlay.querySelector("#mn-refresh-share");
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      overlay.remove();
-      toast("Buscando cambios…");
-      const res = await refreshSharedTrip(trip.id);
-      if (res.ok) {
-        toast("Actualizado con la copia compartida");
-        await renderApp();
-      } else {
-        toast(res.error || "No se pudo actualizar");
-      }
-    });
-  }
   overlay.querySelector("#mn-delete").addEventListener("click", async () => {
     overlay.remove();
     if (await confirmAction(`Se eliminará "${trip.destination}" y todo su contenido (vuelos, hoteles, itinerario...). ¿Continuar?`)) {
@@ -1232,258 +1200,6 @@ async function openDiscoverSheet(trip) {
   if (!overlay.querySelector("#discover-list").children.length) {
     overlay.querySelector("#discover-body").innerHTML = `<p>No encontramos sugerencias para esta zona ahora mismo (puede que no haya conexión, o que el área tenga poca cobertura en estas fuentes). Prueba a buscar un sitio concreto en la pestaña "Buscar".</p>`;
   }
-}
-
-// ------------------------------------------------------------
-// COMPARTIR VIAJE — genera/renueva un código y lo enseña listo para
-// copiar/enviar a quien quieras invitar. Requiere cuenta porque el
-// viaje compartido se guarda en Firestore bajo tu usuario.
-// ------------------------------------------------------------
-
-async function openShareTripSheet(trip) {
-  if (!currentUser()) {
-    toast("Inicia sesión primero en Ajustes → Mi cuenta");
-    return;
-  }
-
-  toast("Generando enlace…");
-  const res = await shareTrip(trip.id);
-  if (!res.ok) {
-    toast(res.error || "No se pudo compartir el viaje");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Viaje compartido</h2>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6;">
-        Dale este código (o el QR) a quien quieras invitar. Desde
-        Ajustes → Unirme a un viaje compartido, con su propia cuenta
-        iniciada, podrá añadirlo a sus viajes escribiéndolo o
-        escaneándolo.
-      </p>
-      <div class="field" style="margin-top:6px;">
-        <input type="text" id="share-code-value" value="${escapeHtml(res.code)}" readonly
-          style="text-align:center; font-size:22px; letter-spacing:3px; font-weight:700;" />
-      </div>
-      <div id="share-qr-wrap" style="display:flex; justify-content:center; margin:14px 0;">
-        <canvas id="share-qr-canvas"></canvas>
-      </div>
-      <div class="modal-actions"><button class="btn btn-primary" id="share-copy">📋 Copiar código</button></div>
-      <div class="modal-actions"><button class="btn btn-ghost" id="share-close">Cerrar</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#share-close").addEventListener("click", () => overlay.remove());
-  overlay.querySelector("#share-copy").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(res.code);
-      toast("Código copiado");
-    } catch (err) {
-      overlay.querySelector("#share-code-value").select();
-      toast("Selecciona y copia el código");
-    }
-  });
-
-  // Si la librería qrcode.js (cargada desde un CDN en index.html) no
-  // llegó a cargar en este dispositivo (bloqueador de anuncios, red
-  // restrictiva, fallo puntual del CDN...), no nos quedamos sin QR en
-  // silencio: se cae a una imagen de un servicio público de QR, que
-  // no depende de ningún script — solo una petición de imagen, como
-  // cualquier foto de la app.
-  function renderQrFallbackImage() {
-    const wrap = overlay.querySelector("#share-qr-wrap");
-    if (!wrap) return;
-    const qrText = encodeURIComponent(shareCodeToQrText(res.code));
-    wrap.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${qrText}" width="190" height="190" alt="Código QR para unirse al viaje" />`;
-  }
-
-  const qrCanvas = overlay.querySelector("#share-qr-canvas");
-  if (typeof QRCode !== "undefined" && typeof QRCode.toCanvas === "function") {
-    QRCode.toCanvas(qrCanvas, shareCodeToQrText(res.code), { width: 190, margin: 1 }, (err) => {
-      if (err) renderQrFallbackImage();
-    });
-  } else {
-    renderQrFallbackImage();
-  }
-}
-
-// Prefijo propio para que el escáner sepa que un QR es de este app
-// (y no lo confunda con cualquier otro código que alguien escanee sin
-// querer). Al leerlo, se quita el prefijo antes de pasarlo a
-// joinSharedTrip; si alguien escanea un QR sin este prefijo, se usa
-// el texto tal cual, por si el código se comparte de otra forma.
-const SHARE_QR_PREFIX = "TPJOIN:";
-
-function shareCodeToQrText(code) {
-  return `${SHARE_QR_PREFIX}${code}`;
-}
-
-function shareCodeFromQrText(text) {
-  const trimmed = (text || "").trim();
-  return trimmed.toUpperCase().startsWith(SHARE_QR_PREFIX) ? trimmed.slice(SHARE_QR_PREFIX.length) : trimmed;
-}
-
-/**
- * Escáner de QR genérico con la cámara del dispositivo. Llama a
- * `onResult(text)` en cuanto lee un código y cierra el overlay. Si el
- * navegador no permite cámara, o falla el permiso, avisa con un toast
- * y no llama a `onResult`.
- */
-async function openQrScannerSheet(onResult) {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    toast("Este dispositivo no permite acceder a la cámara desde el navegador");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">📷 Escanear QR</h2>
-      <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Apunta la cámara al código QR del viaje.</p>
-      <div style="position:relative; border-radius:16px; overflow:hidden; background:#000; aspect-ratio:1/1;">
-        <video id="qr-video" playsinline muted style="width:100%; height:100%; object-fit:cover;"></video>
-      </div>
-      <p id="qr-scan-status" style="color:var(--muted); font-size:12.5px; text-align:center; margin-top:8px;">Buscando código…</p>
-      <div class="modal-actions"><button type="button" class="btn btn-ghost" id="qr-cancel">Cancelar</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  const video = overlay.querySelector("#qr-video");
-  const statusEl = overlay.querySelector("#qr-scan-status");
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  let stream = null;
-  let rafId = null;
-  let stopped = false;
-
-  function stop() {
-    stopped = true;
-    if (rafId) cancelAnimationFrame(rafId);
-    if (stream) stream.getTracks().forEach((tr) => tr.stop());
-  }
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      stop();
-      overlay.remove();
-    }
-  });
-  overlay.querySelector("#qr-cancel").addEventListener("click", () => {
-    stop();
-    overlay.remove();
-  });
-
-  function scanLoop() {
-    if (stopped) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const result = jsQR(imageData.data, imageData.width, imageData.height);
-      if (result?.data) {
-        stop();
-        overlay.remove();
-        onResult(result.data);
-        return;
-      }
-    }
-    rafId = requestAnimationFrame(scanLoop);
-  }
-
-  if (typeof jsQR === "undefined") {
-    statusEl.textContent = "No se pudo cargar el lector de QR (revisa tu conexión e inténtalo de nuevo).";
-    return;
-  }
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    if (stopped) {
-      // Se canceló mientras se pedía el permiso de cámara.
-      stream.getTracks().forEach((tr) => tr.stop());
-      return;
-    }
-    video.srcObject = stream;
-    await video.play();
-    scanLoop();
-  } catch (err) {
-    statusEl.textContent = "No se pudo acceder a la cámara (revisa los permisos del navegador).";
-  }
-}
-
-// ------------------------------------------------------------
-// UNIRSE A UN VIAJE COMPARTIDO — desde Ajustes. Requiere cuenta
-// porque la Cloud Function que gestiona el código identifica al
-// usuario por su sesión.
-// ------------------------------------------------------------
-
-async function openJoinTripSheet() {
-  if (!currentUser()) {
-    toast("Inicia sesión primero en Ajustes → Mi cuenta");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">Unirme a un viaje compartido</h2>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
-        Introduce el código de 6 caracteres que te han pasado, o escanea su QR.
-      </p>
-      <div class="field">
-        <input type="text" id="join-code-input" placeholder="Ej. AB12CD" autocomplete="off"
-          style="text-align:center; font-size:20px; letter-spacing:3px; text-transform:uppercase;" />
-      </div>
-      <div class="modal-actions"><button type="button" class="btn btn-secondary" id="join-scan">📷 Escanear QR</button></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="join-cancel">${t("common_cancel")}</button>
-        <button type="button" class="btn btn-primary" id="join-confirm">Unirme</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#join-cancel").addEventListener("click", () => overlay.remove());
-
-  const codeInput = overlay.querySelector("#join-code-input");
-
-  async function doJoin(code) {
-    const clean = (code || "").trim();
-    if (!clean) {
-      toast("Introduce un código");
-      return;
-    }
-    toast("Uniéndote al viaje…");
-    const res = await joinSharedTrip(clean);
-    if (res.ok) {
-      overlay.remove();
-      toast("¡Listo! El viaje ya aparece en tu lista");
-      await renderApp();
-    } else {
-      toast(res.error || "No se pudo unir al viaje");
-    }
-  }
-
-  overlay.querySelector("#join-confirm").addEventListener("click", () => doJoin(codeInput.value));
-  codeInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doJoin(codeInput.value);
-  });
-  overlay.querySelector("#join-scan").addEventListener("click", () => {
-    openQrScannerSheet((text) => {
-      const code = shareCodeFromQrText(text);
-      overlay.remove();
-      doJoin(code);
-    });
-  });
-
-  setTimeout(() => codeInput.focus(), 50);
 }
 
 // ============================================================
@@ -2463,7 +2179,6 @@ function openSettingsSheet() {
       <div class="modal-handle"></div>
       <h2 class="modal-title">${t("settings_title")}</h2>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-profile">${icon("luggage")} ${t("settings_profile")}</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="st-join-shared">${icon("link")} ${t("settings_join_shared")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-config">${icon("settings")} ${t("settings_config")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="st-cache">${icon("cloud")} ${t("settings_cache")}</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="st-close">${t("common_close")}</button></div>
@@ -2477,7 +2192,6 @@ function openSettingsSheet() {
       openSubSheet(overlay, fn);
     });
   go("#st-profile", openProfileSheet);
-  go("#st-join-shared", openJoinTripSheet);
   go("#st-config", openConfigSheet);
   go("#st-cache", openCacheUsageSheet);
 }
@@ -2499,7 +2213,6 @@ function openConfigSheet() {
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-theme">${icon("theme")} ${t("settings_theme")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-language">${icon("globe")} ${t("settings_language")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-notifications">${icon("bell")} ${t("settings_notifications")}</button></div>
-      <div class="modal-actions"><button class="btn btn-secondary" id="cfg-analytics">📊 ${t("settings_analytics")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-security">${icon("lock")} ${t("settings_security")}</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cfg-legal">${icon("shield")} ${t("settings_privacy")}</button></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="cfg-close">${t("common_close")}</button></div>
@@ -2516,57 +2229,11 @@ function openConfigSheet() {
   go("#cfg-theme", openThemeSheet);
   go("#cfg-language", openLanguageSheet);
   go("#cfg-notifications", openNotificationsSheet);
-  go("#cfg-analytics", openAnalyticsSheet);
   go("#cfg-security", openSecuritySheet);
   go("#cfg-legal", openLegalSheet);
 }
 
 // ------------------------------------------------------------
-// ESTADÍSTICAS DE USO — activa Firebase Analytics (Google), apagado
-// por defecto. Ver analytics.js: sin measurementId configurado en el
-// proyecto Firebase, este interruptor no hace nada todavía aunque se
-// active (no hay ningún sitio al que mandar los datos).
-// ------------------------------------------------------------
-async function openAnalyticsSheet() {
-  const enabled = await hasAnalyticsConsent();
-  const configured = isAnalyticsConfigured();
-
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = h`
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <h2 class="modal-title">📊 Estadísticas de uso</h2>
-      <p style="color:var(--muted); font-size:13.5px; line-height:1.6; margin-top:-8px;">
-        Si lo activas, Viajoo manda a Google Analytics datos anónimos
-        de uso (qué pantallas se abren, qué funciones se usan) para
-        saber qué mejorar. Nunca incluye tus viajes, gastos ni nada
-        de lo que guardas dentro de la app. Está apagado por defecto:
-        actívalo solo si quieres ayudarnos.
-      </p>
-      ${
-        !configured
-          ? `<p style="color:var(--muted); font-size:12.5px;">Todavía no está activado para esta app — este interruptor no hará nada por ahora.</p>`
-          : ""
-      }
-      <div class="modal-actions" style="margin-top:10px;">
-        <button class="btn ${enabled ? "btn-danger" : "btn-primary"}" id="analytics-toggle">
-          ${enabled ? "🔕 Desactivar estadísticas" : "📊 Activar estadísticas"}
-        </button>
-      </div>
-      <div class="modal-actions"><button class="btn btn-ghost" id="analytics-close">Cerrar</button></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => e.target === overlay && overlay.remove());
-  overlay.querySelector("#analytics-close").addEventListener("click", () => overlay.remove());
-
-  overlay.querySelector("#analytics-toggle").addEventListener("click", async () => {
-    await setAnalyticsConsent(!enabled);
-    toast(enabled ? "Estadísticas de uso desactivadas" : "Estadísticas de uso activadas");
-    overlay.remove();
-  });
-}
-
 async function openLanguageSheet() {
   const current = await getLanguage();
   const overlay = document.createElement("div");
@@ -2780,9 +2447,8 @@ async function openNotificationsSheet() {
         restaurante, entrada...), y si tienes alguna actividad
         programada para hoy. También avisa <b>3 y 1 día antes</b> de
         que empiece cada viaje, <b>2 días antes</b> si te quedan cosas
-        sin marcar en la maleta, si quedan <b>gastos sin saldar</b> al
-        terminar un viaje con acompañantes, y cuando alguien actualiza
-        un <b>viaje compartido</b> contigo. Se generan en este
+        sin marcar en la maleta, y si quedan <b>gastos sin saldar</b> al
+        terminar un viaje con acompañantes. Se generan en este
         dispositivo, sin servidor externo — eso sí, solo mientras
         tengas la app abierta en una pestaña (los navegadores no dejan
         avisar en segundo plano sin un servidor propio detrás).
@@ -2982,21 +2648,6 @@ async function checkAndNotifyToday() {
   }
 }
 
-/** Avisa cuando una sincronización (arranque o pull-to-refresh) trae
- * cambios reales de un viaje compartido por otra persona. No hace
- * ninguna llamada de red propia: solo reacciona a un `syncOnLaunch()`
- * que ya se estaba haciendo por otro motivo, para no multiplicar las
- * lecturas a Firestore. */
-async function notifySharedTripsUpdated() {
-  try {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
-    if (!(await Data.settingGet(NOTIF_KEY))) return;
-    new Notification("Viajoo", { body: "🔄 Uno de tus viajes compartidos se ha actualizado" });
-  } catch (err) {
-    // sin permiso o cualquier fallo: no pasa nada
-  }
-}
-
 // ============================================================
 // FELICITACIÓN DE CUMPLEAÑOS — usa la fecha de nacimiento guardada en
 // el perfil (ver saveBirthDate/profile_birth_date en cloud.js/afterLogin)
@@ -3062,13 +2713,12 @@ async function checkBirthday() {
 // términos de uso, propiedad intelectual, cookies, contacto y
 // reclamaciones, y licencias de terceros. Todo bajo Ajustes → Legal.
 //
-// Los datos identificativos del titular (nombre, DNI/NIF, domicilio,
-// email de contacto) van entre corchetes como [PLACEHOLDER]: hay que
-// rellenarlos con los datos reales antes de publicar la app, y no se
-// han inventado unos de mentira aquí a propósito. Esto no sustituye
-// una revisión por un abogado — son plantillas con una estructura
-// estándar (LSSI, RGPD/LOPDGDD, normativa de consumidores), no
-// asesoría legal.
+// El DNI/NIF del titular se omite a propósito, por protección de
+// datos personales: para un proyecto personal sin alta de autónomo
+// no es estrictamente obligatorio (basta con identificar al titular
+// y dar un medio de contacto). Esto no sustituye una revisión por un
+// abogado — son plantillas con una estructura estándar (LSSI,
+// RGPD/LOPDGDD, normativa de consumidores), no asesoría legal.
 // ============================================================
 
 function openLegalTextSheet(title, text) {
@@ -3095,9 +2745,8 @@ julio, de Servicios de la Sociedad de la Información y de Comercio
 Electrónico (LSSI-CE), se informa de que Viajoo es un proyecto
 personal cuyo titular es:
 
-Titular: [NOMBRE Y APELLIDOS]
-DNI/NIF: [DNI/NIF]
-Domicilio: [DOMICILIO]
+Titular: Sebastián Fernández
+Domicilio: Aguilar de Campoo, Palencia, España
 Correo de contacto: contacto@viajoo.es
 
 Por ahora Viajoo es una aplicación personal gratuita, sin
@@ -3105,30 +2754,54 @@ actividad económica real. Si eso cambia, este aviso se actualizará
 con los datos de actividad económica que correspondan.
 
 2. Objeto
-Viajoo es una aplicación web (PWA) para organizar viajes:
-itinerario, vuelos, hoteles, gastos, documentos y contenido
-relacionado, guardado principalmente en el propio dispositivo de
-quien la usa.
+Viajoo es una aplicación web (PWA), también distribuible como app de
+Android, para organizar viajes: itinerario, vuelos, hoteles, gastos,
+documentos y contenido relacionado, guardado principalmente en el
+propio dispositivo de quien la usa.
 
-3. Condiciones de acceso y uso
-El acceso a Viajoo es gratuito. Usar la aplicación implica
-aceptar este Aviso Legal, los Términos y Condiciones de Uso, y la
-Política de Privacidad.
+3. Alojamiento (hosting)
+La aplicación web se aloja en GitHub Pages (GitHub, Inc. / Microsoft).
+La cuenta, la copia en la nube y las funciones
+de servidor (Cloud Functions) se alojan en Firebase/Google Cloud
+Platform (Google Ireland Limited). Ver el detalle de cada proveedor en
+la Política de Privacidad.
 
-4. Legislación aplicable y fuero
+4. Condiciones de acceso y uso
+El acceso a Viajoo es gratuito. Usar la aplicación implica aceptar
+este Aviso Legal, los Términos y Condiciones de Uso, y la Política de
+Privacidad. Si no estás de acuerdo con alguno de estos documentos, no
+debes usar la aplicación.
+
+5. Normativa aplicable
+Este aviso, y el resto de documentos legales de Viajoo, se redactan
+conforme a la Ley 34/2002 (LSSI-CE), el Reglamento (UE) 2016/679
+(RGPD), la Ley Orgánica 3/2018 (LOPDGDD) y el Texto Refundido de la
+Ley General para la Defensa de los Consumidores y Usuarios (Real
+Decreto Legislativo 1/2007).
+
+6. Legislación aplicable y fuero
 Estas condiciones se rigen por la legislación española. Para
 cualquier controversia que no se resuelva por el canal de contacto y
 reclamaciones, y cuando la persona usuaria tenga la condición de
 consumidora, se estará a lo dispuesto por la normativa de protección
-de consumidores en cuanto a juzgados y tribunales competentes.
+de consumidores en cuanto a juzgados y tribunales competentes — que,
+por defecto, son los del domicilio de la persona consumidora, no los
+del titular de la app. Esta cláusula no puede usarse para obligar a
+un consumidor a litigar en un fuero distinto al que le corresponde
+por ley.
+
+7. Modificaciones de este aviso
+Este aviso puede actualizarse para reflejar cambios legales o de la
+propia app. La fecha de "Última actualización" de arriba indica la
+versión vigente.
 `.trim();
 
 const PRIVACY_POLICY_TEXT = `
 Última actualización: ${new Date().getFullYear()}
 
 Responsable del tratamiento
-[NOMBRE Y APELLIDOS], con DNI/NIF [DNI/NIF] y domicilio en
-[DOMICILIO], es quien responde de los datos que trata esta aplicación.
+Sebastián Fernández, con domicilio en Aguilar de Campoo, Palencia,
+España, es quien responde de los datos que trata esta aplicación.
 Puedes escribir a contacto@viajoo.es para cualquier duda sobre esta
 política o para ejercer tus derechos.
 
@@ -3143,9 +2816,9 @@ Si creas una cuenta (con email y contraseña, o con tu cuenta de Google),
 tus datos se guardan también en Firebase (Google) bajo tu usuario, para
 poder recuperarlos en otro dispositivo. Puedes cerrar sesión y eliminar tu
 cuenta cuando quieras. Las funciones básicas siguen funcionando sin
-cuenta, de forma 100% local; algunas funciones concretas (viajes
-compartidos, conversor de moneda, ordenar ruta, exportar a PDF), en
-cambio, sí piden tener una cuenta creada — gratuita, sin ningún cobro.
+cuenta, de forma 100% local; algunas funciones concretas (conversor de
+moneda, ordenar ruta, exportar a PDF), en cambio, sí piden tener una
+cuenta creada — gratuita, sin ningún cobro.
 
 3. Servicios externos que puede consultar la app
 Para mostrar mapas, calcular rutas, encontrar fotos e imágenes reales de
@@ -3163,16 +2836,24 @@ puntuales, en cada visita el navegador carga las tipografías de la app
 revela tu dirección IP a Google mientras descarga la fuente (ver también
 Cookies y almacenamiento local).
 
-4. Viajes compartidos
-Si compartes un viaje con un código de 6 dígitos (o su QR, que solo
-contiene ese mismo código), sus datos (vuelos, hoteles, itinerario...)
-se guardan en un documento de Firestore accesible por quienes tengan
-el código, además de en tu copia personal de la nube. Cualquiera con
-el código o el QR puede ver y unirse a ese viaje mientras esté activo.
-Al escanear un QR para unirte a un viaje, la app usa la cámara del
-dispositivo solo mientras la ventana de escaneo está abierta: ese
-vídeo nunca se guarda ni se envía a ningún sitio, solo se analiza en
-el propio dispositivo para leer el código.
+4. Encargados del tratamiento (a quién recurrimos para operar Viajoo)
+Cuando usas una función que lo requiere, estos proveedores tratan datos
+por cuenta nuestra, bajo contrato de encargo del tratamiento (art. 28
+RGPD) o como responsables independientes de su propio servicio público:
+- Google Ireland Limited (Firebase/Google Cloud): cuenta, copia en la
+  nube, funciones de servidor, Google Analytics y Google Fonts.
+- GitHub, Inc. / Microsoft: alojamiento de la aplicación web (GitHub
+  Pages).
+- Deomail: envío de emails transaccionales (formulario de contacto,
+  avisos de seguridad de tu cuenta).
+- OpenStreetMap/Nominatim, OSRM, Overpass, Wikipedia/Wikimedia
+  Commons/Openverse, Frankfurter/open.er-api: servicios públicos de
+  mapas, lugares, fotos y tipos de cambio (ver punto 3).
+Ninguno de estos proveedores puede usar tus datos para fines propios
+distintos de prestarnos su servicio, salvo lo que sus propias
+condiciones indiquen para los servicios públicos gratuitos del último
+grupo (mapas, fotos, tipos de cambio), que reciben solo el texto puntual
+de la consulta, nunca tu identidad.
 
 5. Notificaciones
 Si activas los avisos, se generan en tu propio dispositivo a partir de tus
@@ -3197,42 +2878,71 @@ completó. Nadie más que tú puede ver ni recuperar tu PIN.
 8. Estadísticas de uso y publicidad
 Viajoo no muestra publicidad dentro de la app. Sí incluye Google
 Analytics para medir el uso (qué pantallas se abren, qué funciones se
-usan), pero apagado por defecto: solo se activa si tú mismo lo
-enciendes en Ajustes → Preferencias → Estadísticas de uso, y puedes
-apagarlo cuando quieras desde el mismo sitio. Mientras no lo
-actives, no se carga nada de Google Analytics ni se manda ningún
-dato. Nunca incluye tus viajes, gastos ni nada de lo que guardas
-dentro de la app — ver más detalle en Cookies y almacenamiento local.
+usan, tipo de dispositivo), activo de forma continua para poder
+mejorar la aplicación — ver la base legal en el punto 10 y cómo
+impedirlo en Cookies y almacenamiento local. Nunca incluye tus viajes,
+gastos ni nada de lo que guardas dentro de la app.
 
-9. Base legal y conservación de tus datos
-Tratamos tus datos para prestarte el servicio que pides (organizar tus
-viajes) y, cuando das tu consentimiento expreso, para funciones
-opcionales concretas (copia en la nube, PIN, biometría, notificaciones,
-viajes compartidos). Tus datos se conservan mientras mantengas la app
-instalada y, si tienes cuenta, hasta que la elimines o nos pidas que
-la borremos.
+9. Seguridad y prevención de abusos
+Para proteger tu cuenta y el servicio, tratamos de forma limitada datos
+técnicos (intentos de inicio de sesión, de registro y de recuperar
+contraseña) con el único fin de detectar y frenar patrones de abuso
+(fuerza bruta, registro o sincronización masiva). Esta base es nuestro
+interés legítimo en mantener el servicio seguro (art. 6.1.f RGPD),
+ponderado para no afectar a tu privacidad más de lo necesario: estos
+datos solo se usan para ese fin, con un límite de conservación corto,
+y son accesibles únicamente desde nuestras funciones de servidor.
 
-10. Tus derechos
+10. Base legal y conservación de tus datos
+Tratamos tus datos: (a) para prestarte el servicio que pides —
+organizar tus viajes—, lo que es necesario para ejecutar el contrato
+de uso que aceptas al usar la app; (b) con tu consentimiento expreso,
+para funciones opcionales concretas (copia en la nube, PIN, biometría,
+notificaciones), consentimiento que puedes retirar en cualquier
+momento sin que afecte a lo ya hecho antes de retirarlo; y (c) por
+interés legítimo, para la seguridad descrita en el punto 9 y para las
+estadísticas de uso del punto 8 — en este último caso, limitando el
+dato a lo mínimo necesario para entender el uso agregado de la app,
+nunca tu identidad ni tu actividad concreta, y permitiendo que lo
+bloquees desde tu navegador en cualquier momento (ver Cookies y
+almacenamiento local). Tus datos se conservan mientras mantengas la
+app instalada y, si tienes cuenta, hasta que la elimines o nos pidas
+que la borremos; los datos técnicos de seguridad del punto 9 se
+conservan solo el tiempo necesario para ese fin.
+
+11. Tus derechos
 Tienes derecho a acceder, rectificar, suprimir, limitar y oponerte al
 tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
 estos derechos tú mismo desde Ajustes → Copiar / restaurar datos
 (exportar o borrar) y Ajustes → Mi cuenta (eliminar la cuenta). Para lo
-que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
+que no puedas hacer directamente, escríbenos a contacto@viajoo.es;
+respondemos en el plazo de un mes que marca el RGPD (ampliable dos
+meses más en solicitudes complejas, avisándote del motivo). Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
-11. Transferencias internacionales
-Firebase (Google) puede tratar datos en servidores fuera del Espacio
-Económico Europeo, acogido a las garantías que exige el RGPD (cláusulas
-contractuales tipo u otro mecanismo equivalente).
+12. Transferencias internacionales
+Google (Firebase) puede tratar datos en servidores fuera del Espacio
+Económico Europeo (por ejemplo, en Estados Unidos). Estas
+transferencias se acogen a las garantías que exige el capítulo V del
+RGPD: las Cláusulas Contractuales Tipo de la Comisión Europea y la
+adhesión de Google al EU-U.S. Data Privacy Framework. Puedes pedirnos
+una copia de las garantías aplicables escribiendo a contacto@viajoo.es.
 
-12. Menores de edad
+13. Brechas de seguridad
+Si se produjera una violación de seguridad de tus datos personales que
+suponga un riesgo para tus derechos, lo notificaremos a la Agencia
+Española de Protección de Datos en el plazo de 72 horas desde que
+tengamos constancia (art. 33 RGPD) y te avisaremos directamente si el
+riesgo es alto (art. 34 RGPD).
+
+14. Menores de edad
 Viajoo no está dirigida a menores de 14 años. Si eres menor de
 edad, necesitas el consentimiento de tus padres o tutores para crear
 una cuenta o activar funciones que impliquen guardar datos en la nube.
 
-13. Contacto
+15. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
 contacto@viajoo.es.
 `.trim();
@@ -3260,48 +2970,102 @@ autorizado.
 4. Uso aceptable
 Te comprometes a usar Viajoo de forma lícita, sin:
 - Intentar acceder a datos de otras personas usuarias sin autorización.
-- Usar la función de compartir viajes para distribuir contenido
-  ilegal, ofensivo o que infrinja derechos de terceros.
 - Interferir con el funcionamiento de la app o de los servicios de
-  terceros que consulta (mapas, tipos de cambio...).
+  terceros que consulta (mapas, tipos de cambio...), incluyendo
+  intentar saltarte los límites de uso del punto 5.
+- Usar la app con fines fraudulentos o para dañar a terceros.
 
-5. Contenido que introduces tú
+5. Uso justo de las funciones con límite
+Algunas funciones (registro de cuenta, recuperar contraseña) tienen un
+límite diario de intentos por cuenta o por email, aplicado en el
+servidor para que sea real y no se pueda esquivar. Estos límites
+existen para mantener el servicio disponible y evitar abusos (por
+ejemplo, probar contraseñas al azar); podemos ajustarlos sin previo
+aviso si es necesario para proteger la app.
+
+6. Contenido que introduces tú
 Los datos de tus viajes (destinos, notas, fotos que subas si lo haces...)
 son tuyos. Nos das permiso únicamente para procesarlos y mostrártelos a
-ti (y a quien invites, si compartes un viaje), nunca para usarlos con
-otro fin. Ver también Propiedad intelectual.
+ti, nunca para usarlos con otro fin. Ver también Propiedad intelectual.
+Eres el único responsable del contenido que introduces, y de que no
+infrinja derechos de terceros ni la ley — ver también el punto 10
+(indemnización).
 
-6. Disponibilidad del servicio
+7. Disponibilidad del servicio
 Viajoo depende en parte de servicios externos gratuitos (mapas,
 tipos de cambio, geocodificación...) que pueden fallar o dejar de
 estar disponibles sin previo aviso; la app está pensada para seguir
 funcionando con lo que ya tengas guardado localmente aunque eso pase.
 No garantizamos que el servicio esté disponible de forma
-ininterrumpida.
+ininterrumpida, ni que esté libre de errores.
 
-7. Cambios en la app y en estas condiciones
+8. Cambios en la app y en estas condiciones
 Podemos añadir, cambiar o retirar funciones, y actualizar estas
-condiciones. Si el cambio es importante, avisaremos dentro de la app.
-Seguir usando Viajoo después de un cambio implica que lo
-aceptas.
+condiciones. Si el cambio es importante, avisaremos dentro de la app
+con antelación razonable. Seguir usando Viajoo después de un cambio
+implica que lo aceptas; si no lo aceptas, debes dejar de usar la app.
 
-8. Limitación de responsabilidad
-Viajoo se ofrece "tal cual". Dentro de lo que permite la ley, no
-respondemos de decisiones de viaje que tomes basándote en datos de la
-app (tipos de cambio, horarios, distancias...) ni de fallos de los
-servicios externos que consulta. Revisa siempre la información
+9. Limitación de responsabilidad
+Viajoo se ofrece "tal cual" y "según disponibilidad", sin garantías de
+que sea ininterrumpida o esté libre de errores. Dentro de lo que
+permite la ley, no respondemos de: decisiones de viaje que tomes
+basándote en datos de la app (tipos de cambio, horarios, distancias...);
+fallos, indisponibilidad o cambios en los servicios externos que
+consulta; ni de daños indirectos, lucro cesante o pérdida de datos no
+imputable a dolo o negligencia grave por nuestra parte. Nada en esta
+cláusula excluye ni limita la responsabilidad por dolo, negligencia
+grave, muerte o lesiones personales, ni ningún derecho que la
+normativa de consumidores te reconozca de forma imperativa: donde la
+ley no permita limitar la responsabilidad, esta cláusula se aplica
+solo hasta donde la ley sí lo permite. Revisa siempre la información
 importante (horarios de vuelo, tipos de cambio, reservas) con la
 fuente oficial antes de viajar.
 
-9. Terminación
+10. Indemnización
+Si tu incumplimiento de estas condiciones (por ejemplo, introducir
+contenido ilegal o infractor, o un uso fraudulento de la app) nos causa
+un daño o da lugar a una reclamación de terceros, te comprometes a
+responder de ello en la medida que corresponda según la ley, sin que
+esto afecte a los derechos que tengas como persona consumidora.
+
+11. Contenido ilícito y retirada
+Si crees que algún contenido de la app infringe tus derechos, o es por
+otro motivo ilícito, escríbenos a contacto@viajoo.es con el detalle.
+Revisaremos la notificación y, si procede, retiraremos el contenido o
+suspenderemos el acceso de quien lo introdujo, sin perjuicio de las
+acciones legales que correspondan.
+
+12. Fuerza mayor
+No responderemos de incumplimientos causados por circunstancias fuera
+de nuestro control razonable (caídas de proveedores externos, cortes de
+red o de suministro, catástrofes, actos de autoridad, etc.).
+
+13. Terminación
 Puedes dejar de usar la app y borrar tus datos cuando quieras (Ajustes
 → Copiar / restaurar datos, o eliminar tu cuenta). Podemos suspender el
 acceso a quien incumpla gravemente estas condiciones (por ejemplo,
-abusando de la función de compartir viajes).
+abusando de los límites de uso).
 
-10. Legislación aplicable
+14. Resolución de conflictos
+Antes de acudir a la vía judicial, intenta resolver cualquier
+desacuerdo escribiendo a contacto@viajoo.es (ver Contacto y
+reclamaciones) — la mayoría de incidencias se resuelven así. Como
+alternativa voluntaria y gratuita a un juicio, si eres consumidor
+puedes acudir a las Juntas Arbitrales de Consumo de tu comunidad
+autónoma.
+
+15. Divisibilidad y acuerdo completo
+Si algún tribunal declara inválida o inaplicable alguna cláusula de
+estas condiciones, el resto sigue en vigor; la cláusula inválida se
+sustituye por otra que refleje su intención original dentro de lo que
+permite la ley. Estas condiciones, junto con el Aviso Legal y la
+Política de Privacidad, son el acuerdo completo entre tú y Viajoo
+sobre su uso. Que no apliquemos una cláusula en un caso concreto no
+significa que renunciemos a ella.
+
+16. Legislación aplicable
 Estas condiciones se rigen por la ley española (ver también Aviso
-Legal).
+Legal, punto 6, sobre el fuero aplicable).
 `.trim();
 
 const INTELLECTUAL_PROPERTY_TEXT = `
@@ -3310,7 +3074,7 @@ const INTELLECTUAL_PROPERTY_TEXT = `
 1. Titularidad
 El código, el diseño, la marca "Viajoo" y los contenidos propios
 de la aplicación (textos, iconos e interfaz) son propiedad de
-[NOMBRE Y APELLIDOS], salvo el software de terceros con licencia propia
+Sebastián Fernández, salvo el software de terceros con licencia propia
 (ver Licencias).
 
 2. Uso permitido
@@ -3321,8 +3085,11 @@ del software de terceros que incluye.
 
 3. Tus contenidos
 Los datos y contenidos que introduces (notas, fotos que subas si lo
-haces, nombres de tus viajes...) siguen siendo tuyos. Ver también la
-sección "Contenido que introduces tú" de los Términos y Condiciones.
+haces, nombres de tus viajes...) siguen siendo tuyos. Al introducirlos,
+nos das una licencia limitada, no exclusiva y revocable (se extingue si
+borras el contenido o tu cuenta) para almacenarlos y mostrártelos a ti
+únicamente con el fin de prestarte el servicio. Ver también la sección
+"Contenido que introduces tú" de los Términos y Condiciones.
 
 4. Contenido de terceros mostrado en la app
 Algunas fotos, descripciones y datos de mapas que se muestran vienen de
@@ -3345,7 +3112,9 @@ servicio.
 6. Reclamaciones de propiedad intelectual
 Si crees que algo en la app infringe tus derechos de propiedad
 intelectual, escríbenos a contacto@viajoo.es con el detalle para poder
-revisarlo.
+revisarlo. Igual que con cualquier otro contenido ilícito (ver el punto
+11 de los Términos y Condiciones de Uso), revisaremos la notificación
+y retiraremos el contenido si procede.
 `.trim();
 
 const COOKIES_TEXT = `
@@ -3366,14 +3135,14 @@ Puedes borrar todo esto en cualquier momento desde los ajustes de tu
 navegador ("borrar datos del sitio"), o desde Ajustes → Copiar /
 restaurar datos dentro de la app.
 
-3. Estadísticas de uso (Google Analytics) — apagado por defecto
-Ajustes → Preferencias → Estadísticas de uso deja activar, de forma
-voluntaria, que Viajoo mande a Google Analytics datos anónimos de uso
-(qué pantallas se abren, qué funciones se usan) para saber qué
-mejorar. Mientras no lo actives tú mismo, no se carga nada de Google
-Analytics ni se manda ningún dato. Nunca incluye tus viajes, gastos
-ni nada de lo que guardas dentro de la app, y puedes desactivarlo en
-cualquier momento desde el mismo ajuste.
+3. Estadísticas de uso (Google Analytics)
+Viajoo manda a Google Analytics datos de uso (qué pantallas se abren,
+qué funciones se usan, tipo de dispositivo) para saber qué mejorar.
+Esto funciona de forma continua, sin un interruptor dentro de la app
+para desactivarlo. Nunca incluye tus viajes, gastos ni nada de lo que
+guardas dentro de la app. Si quieres impedirlo, puedes bloquear el
+dominio de Google Analytics (google-analytics.com, googletagmanager.com)
+con un bloqueador de contenido en tu navegador.
 
 4. Fuentes de Google Fonts
 Para mostrar su tipografía, la app carga las fuentes Plus Jakarta Sans,
@@ -3407,9 +3176,14 @@ contacto@viajoo.es.
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
 - Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
+- Si eres consumidor, acudir a las Juntas Arbitrales de Consumo de tu
+  comunidad autónoma (arbitraje de consumo: gratuito, voluntario para
+  ambas partes y más rápido que un juicio).
 - Si la reclamación es sobre el tratamiento de tus datos personales,
   puedes acudir a la Agencia Española de Protección de Datos
   (www.aepd.es).
+Nada de lo anterior te impide acudir directamente a la vía judicial si
+lo prefieres.
 
 3. Tiempo de respuesta
 Al ser un proyecto personal, procuramos responder en un plazo
@@ -3430,12 +3204,8 @@ que exigen dar crédito a su autoría:
   © colaboradores de SortableJS.
 - jsPDF — generación del PDF del mapa y del itinerario en el propio
   dispositivo. Licencia MIT. © autores de jsPDF.
-- qrcode — generación del código QR para compartir un viaje. Licencia
-  MIT. © Ryan Day (soldair) y colaboradores.
-- jsQR — lectura de códigos QR con la cámara. Licencia Apache 2.0.
-  © Cosmo Wolfe.
-- Firebase JS SDK — cuenta, copia en la nube y viajes compartidos
-  (Google). Licencia Apache 2.0.
+- Firebase JS SDK — cuenta y copia en la nube (Google). Licencia
+  Apache 2.0.
 - Datos de mapas de OpenStreetMap — © colaboradores de OpenStreetMap,
   licencia Open Database License (ODbL) 1.0.
 - Tipografías Plus Jakarta Sans, Inter e IBM Plex Mono — Google Fonts,
@@ -3682,7 +3452,7 @@ async function openProfileSheet() {
   });
 }
 
-export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin, notifySharedTripsUpdated };
+export { openSettingsSheet, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin };
 
 // ============================================================
 // DESLIZAR PARA RECARGAR (pull-to-refresh)
@@ -3771,10 +3541,7 @@ function installPullToRefresh() {
         ring.style.transform = "";
         const wait = new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS));
         Promise.all([syncOnLaunch().catch(() => false), wait])
-          .then(([updated]) => {
-            if (updated) notifySharedTripsUpdated();
-            return renderApp();
-          })
+          .then(() => renderApp())
           .catch(() => {})
           .then(() => {
             refreshing = false;

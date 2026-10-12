@@ -8,7 +8,7 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { Data, STORES, onDataChange } from "./db.js";
 import { LOGIN_ENDPOINT } from "./login-config.js";
-import { JOIN_TRIP_ENDPOINT, EMAIL_ACTION_QUOTA_ENDPOINT } from "./rate-limit-config.js";
+import { EMAIL_ACTION_QUOTA_ENDPOINT } from "./rate-limit-config.js";
 
 const SDK_BASE = "https://www.gstatic.com/firebasejs/12.19.0";
 
@@ -77,7 +77,6 @@ function scheduleAutoPush() {
     autoPushTimer = null;
     if (!currentUser()) return; // sin sesión: nada que subir
     await pushToCloud();
-    await pushAllSharedTrips();
   }, AUTO_PUSH_DELAY_MS);
 }
 
@@ -139,14 +138,12 @@ function syncOnLaunch() {
       if ((lastChange || 0) > (lastPushed || 0)) {
         // Cambios locales sin subir todavía: los subimos primero.
         await pushToCloud();
-        await pushAllSharedTrips();
         finish(false);
         return;
       }
 
       const res = await pullFromCloud();
-      const sharedChanged = await refreshAllSharedTrips();
-      finish(res.ok === true || sharedChanged);
+      finish(res.ok === true);
     });
   });
 }
@@ -469,206 +466,6 @@ async function cloudHasBackup() {
   }
 }
 
-// ============================================================
-// VIAJES COMPARTIDOS (Pro) — un viaje concreto (no toda la cuenta)
-// se guarda también en su propio documento de Firestore, al que
-// puede unirse cualquiera que tenga el código. Es "el último que
-// sube gana" igual que la copia de la cuenta: no hay fusión
-// campo a campo, así que para uso simultáneo intenso (varias
-// personas editando el mismo instante) puede pisarse algo — para
-// una pareja o grupo planeando un viaje por turnos funciona bien.
-// ============================================================
-
-const SHARED_COLLECTION = "shared_trips";
-const TRIP_CHILD_STORES = STORES.filter((s) => s !== "trips");
-
-function genShareCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-async function exportTripPayload(tripId) {
-  const trip = await Data.get("trips", tripId);
-  if (!trip) return null;
-  const payload = { trip };
-  for (const storeName of TRIP_CHILD_STORES) {
-    payload[storeName] = await Data.getAllByTrip(storeName, tripId);
-  }
-  return payload;
-}
-
-async function applyRemoteTripUpdate(localTripId, payload) {
-  const localTrip = await Data.get("trips", localTripId);
-  if (!localTrip || !payload || !payload.trip) return;
-  const { id, ...remoteTripFields } = payload.trip;
-  await Data.put("trips", { ...localTrip, ...remoteTripFields, id: localTripId, share_code: localTrip.share_code });
-  await Data.replaceTripChildren(localTripId, payload);
-}
-
-/**
- * Convierte un viaje ya existente en tu lista en un viaje compartido:
- * genera (o reutiliza) un código de 6 caracteres y sube su contenido
- * a un documento propio en Firestore. Requiere tener una cuenta.
- */
-async function shareTrip(tripId) {
-  try {
-    const s = await ensureFirebase();
-    const user = s.auth.currentUser;
-    if (!user) return { ok: false, error: "Inicia sesión para compartir un viaje." };
-
-    const trip = await Data.get("trips", tripId);
-    if (!trip) return { ok: false, error: "Viaje no encontrado." };
-
-    const code = trip.share_code || genShareCode();
-    const payload = await exportTripPayload(tripId);
-
-    await s.storeMod.setDoc(
-      s.storeMod.doc(s.db, SHARED_COLLECTION, code),
-      {
-        ownerUid: user.uid,
-        members: s.storeMod.arrayUnion(user.uid),
-        data: JSON.stringify(payload),
-        updatedAt: s.storeMod.serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    if (trip.share_code !== code) {
-      await Data.put("trips", { ...trip, share_code: code });
-    }
-    return { ok: true, code };
-  } catch (err) {
-    return { ok: false, error: friendlyAuthError(err) };
-  }
-}
-
-/**
- * Se une a un viaje compartido a partir de su código: lo añade como
- * un viaje nuevo en tu lista, con su propio id local. Requiere tener
- * una cuenta.
- *
- * Pasa por la Cloud Function "joinSharedTrip" (ver rate-limit-config.js)
- * en vez de leer/escribir Firestore directamente: así el cupo diario
- * de intentos es real por cuenta (no se puede probar códigos en bucle
- * borrando datos locales), y firestore.rules ya no necesita dejar leer
- * el documento a nadie que no sea miembro todavía.
- */
-async function joinSharedTrip(code) {
-  if (!JOIN_TRIP_ENDPOINT) {
-    return { ok: false, error: "Unirse a un viaje compartido no está disponible ahora mismo." };
-  }
-  try {
-    const s = await ensureFirebase();
-    const user = s.auth.currentUser;
-    if (!user) return { ok: false, error: "Inicia sesión para unirte a un viaje compartido." };
-
-    const cleanCode = (code || "").trim().toUpperCase();
-    if (!cleanCode) return { ok: false, error: "Introduce un código." };
-
-    const idToken = await user.getIdToken();
-    const res = await fetch(JOIN_TRIP_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ code: cleanCode }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error || "No se pudo unir al viaje compartido." };
-
-    const payload = data.payload;
-    const { id, share_code, ...tripFields } = payload.trip;
-    const newTripId = await Data.add("trips", { ...tripFields, share_code: cleanCode });
-    await Data.replaceTripChildren(newTripId, payload);
-
-    return { ok: true, tripId: newTripId };
-  } catch (err) {
-    return { ok: false, error: NO_CONNECTION_MSG };
-  }
-}
-
-// Recuerda, por código de viaje compartido, la fecha de la última
-// versión ya aplicada localmente — para no reescribir los datos (ni
-// avisar de una actualización) cuando refreshSharedTrip se llama de
-// nuevo y nadie ha tocado nada desde la última vez.
-const SHARED_SEEN_PREFIX = "shared_seen:";
-
-/**
- * Descarga la versión más reciente de un viaje ya compartido (por si
- * otro miembro ha hecho cambios) y sustituye sus datos locales.
- * `changed` en la respuesta indica si de verdad había algo nuevo (para
- * poder avisar sin repetir el aviso en cada sincronización silenciosa).
- */
-async function refreshSharedTrip(tripId) {
-  try {
-    const trip = await Data.get("trips", tripId);
-    if (!trip || !trip.share_code) return { ok: false, error: "Este viaje no está compartido." };
-    const s = await ensureFirebase();
-    const snap = await s.storeMod.getDoc(s.storeMod.doc(s.db, SHARED_COLLECTION, trip.share_code));
-    if (!snap.exists()) return { ok: false, error: "El viaje compartido ya no existe en la nube." };
-    const remote = snap.data();
-    const remoteUpdatedAt = remote.updatedAt && typeof remote.updatedAt.toMillis === "function" ? remote.updatedAt.toMillis() : null;
-    const seenKey = SHARED_SEEN_PREFIX + trip.share_code;
-    const lastSeen = await Data.settingGet(seenKey);
-    if (remoteUpdatedAt && lastSeen && remoteUpdatedAt <= lastSeen) {
-      return { ok: true, changed: false };
-    }
-    const payload = JSON.parse(remote.data);
-    await applyRemoteTripUpdate(tripId, payload);
-    if (remoteUpdatedAt) await Data.settingSet(seenKey, remoteUpdatedAt);
-    return { ok: true, changed: true };
-  } catch (err) {
-    return { ok: false, error: friendlyAuthError(err) };
-  }
-}
-
-// Sube la versión local de un viaje compartido concreto, si tiene
-// código asignado. La llama el autosync tras cada subida general.
-async function pushSharedTripIfNeeded(tripId) {
-  if (!currentUser()) return;
-  try {
-    const trip = await Data.get("trips", tripId);
-    if (!trip || !trip.share_code) return;
-    const s = await ensureFirebase();
-    const payload = await exportTripPayload(tripId);
-    await s.storeMod.setDoc(
-      s.storeMod.doc(s.db, SHARED_COLLECTION, trip.share_code),
-      { data: JSON.stringify(payload), updatedAt: s.storeMod.serverTimestamp() },
-      { merge: true }
-    );
-  } catch (err) {
-    // sin conexión: se reintentará en el próximo cambio o al reabrir
-  }
-}
-
-async function pushAllSharedTrips() {
-  try {
-    const trips = await Data.getAll("trips");
-    for (const trip of trips) {
-      if (trip.share_code) await pushSharedTripIfNeeded(trip.id);
-    }
-  } catch (err) {
-    // nunca debe romper el autosync general
-  }
-}
-
-/**
- * Descarga los cambios de todos los viajes compartidos locales.
- * Devuelve true si alguno trajo algo nuevo (para volver a pintar).
- */
-async function refreshAllSharedTrips() {
-  if (!currentUser()) return false;
-  try {
-    const trips = await Data.getAll("trips");
-    let changed = false;
-    for (const trip of trips) {
-      if (!trip.share_code) continue;
-      const res = await refreshSharedTrip(trip.id);
-      if (res.ok && res.changed) changed = true;
-    }
-    return changed;
-  } catch (err) {
-    return false;
-  }
-}
-
 export {
   currentUser,
   getIdToken,
@@ -687,8 +484,4 @@ export {
   getBirthDate,
   enableAutoSync,
   syncOnLaunch,
-  shareTrip,
-  joinSharedTrip,
-  refreshSharedTrip,
-  refreshAllSharedTrips,
 };

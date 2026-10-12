@@ -48,7 +48,7 @@ const PATHS = {
   users: `<circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/><path d="M15.5 6.2a2.7 2.7 0 0 1 0 5.2"/><path d="M18 14.7c2 .5 3.2 2 3.2 5.3"/>`,
   // Nube — copia de seguridad / restaurar datos.
   cloud: `<path d="M7.5 18a4.5 4.5 0 0 1-.4-9 5.5 5.5 0 0 1 10.6-1.8A4 4 0 0 1 17 18H7.5Z"/>`,
-  // Eslabones encadenados — unirse a un viaje compartido por código/enlace.
+  // Eslabones encadenados — enlace / licencias de terceros.
   link: `<path d="M7 17l-2.1-2.1a4 4 0 0 1 0-5.6l1.4-1.4a4 4 0 0 1 5.6 0L14 10"/><path d="M17 7l2.1 2.1a4 4 0 0 1 0 5.6l-1.4 1.4a4 4 0 0 1-5.6 0L10 14"/>`,
   // Campana — notificaciones.
   bell: `<path d="M6 16v-4.5a6 6 0 0 1 12 0V16l1.5 2.5h-15L6 16Z"/><path d="M10 19a2 2 0 0 0 4 0"/>`,

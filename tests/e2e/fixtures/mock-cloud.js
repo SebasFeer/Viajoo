@@ -67,19 +67,6 @@ async function syncOnLaunch() {
   if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
   return !!cfg().syncOnLaunchResult;
 }
-async function shareTrip() {
-  return { ok: true, code: "ABC123" };
-}
-async function joinSharedTrip() {
-  return { ok: false };
-}
-async function refreshSharedTrip() {
-  return { ok: false };
-}
-async function refreshAllSharedTrips() {
-  return false;
-}
-
 export {
   currentUser,
   getIdToken,
@@ -98,8 +85,4 @@ export {
   getBirthDate,
   enableAutoSync,
   syncOnLaunch,
-  shareTrip,
-  joinSharedTrip,
-  refreshSharedTrip,
-  refreshAllSharedTrips,
 };

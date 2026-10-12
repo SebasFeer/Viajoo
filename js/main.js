@@ -1,14 +1,13 @@
-import { renderApp, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin, notifySharedTripsUpdated } from "./app.js";
+import { renderApp, installSwipeBack, installAndroidBackHandling, installModalSwipeToClose, installReturnSplash, loadTheme, checkAndNotifyToday, checkBirthday, installPullToRefresh, afterLogin } from "./app.js";
 import { guardOnLaunch, installBackgroundLock } from "./lock.js";
 import { onAuthChange, enableAutoSync, syncOnLaunch, completeGoogleRedirect } from "./cloud.js";
 import { shouldShowOnboarding, renderOnboarding } from "./onboarding.js";
 import { loadLanguage } from "./i18n.js";
-import { initAnalyticsIfConsented, track } from "./analytics.js";
+import { initAnalytics, track } from "./analytics.js";
 
-// Si ya se había dado consentimiento para estadísticas de uso en una
-// sesión anterior, carga Analytics ahora (si no, esto no hace nada —
-// ver analytics.js). No bloquea el resto del arranque.
-initAnalyticsIfConsented();
+// Carga Analytics ahora si está configurado (si no, esto no hace
+// nada — ver analytics.js). No bloquea el resto del arranque.
+initAnalytics();
 track("app_open");
 
 // Aplica el tema guardado (claro/oscuro/automático) antes del primer
@@ -81,10 +80,7 @@ completeGoogleRedirect().then((user) => {
   // que siempre se hace con lo que ya hay en local). Si trae datos
   // nuevos de otro dispositivo, se vuelve a pintar la pantalla.
   syncOnLaunch().then((updated) => {
-    if (updated) {
-      renderApp();
-      notifySharedTripsUpdated();
-    }
+    if (updated) renderApp();
   });
 });
 

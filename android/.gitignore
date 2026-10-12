@@ -1,0 +1,13 @@
+# Artefactos de compilación, nunca se comitean (se regeneran siempre)
+.gradle/
+app/build/
+build/
+*.apk
+*.aab
+local.properties
+
+# Clave de firma y sus contraseñas: NUNCA van al repo. Sin esto no se
+# pueden firmar nuevas versiones con la misma identidad en Google Play
+# — se guarda aparte, en un gestor de contraseñas.
+android-keystore.jks
+KEYSTORE_PASSWORDS_GUARDAR.txt

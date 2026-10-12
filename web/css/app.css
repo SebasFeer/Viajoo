@@ -275,29 +275,6 @@
   .vjx-foot { margin-top: 22pt; font-size: 8.5pt; color: #828294; }
 }
 
-/* ===== share-settings ===== */
-/* ---------- Compartir / unirse a un viaje (features/share.js) ---------- */
-.shr-lead { margin: 0 0 16px; font-size: 15px; line-height: 1.6; }
-.shr-code-card { display: grid; justify-items: center; gap: 10px; padding: 20px 16px; border-radius: 20px; background: var(--paper); border: 1px solid var(--line); text-align: center; }
-.shr-code { width: 100%; max-width: 320px; text-align: center; font-size: 26px; font-weight: 700; letter-spacing: .3em; padding: 12px 10px 12px calc(10px + .3em); border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
-.shr-code:focus { outline: 2px solid var(--brand); outline-offset: 0; border-color: transparent; }
-.shr-code-input { max-width: none; font-size: 22px; text-transform: uppercase; }
-.shr-code-input::placeholder { color: var(--muted); letter-spacing: .2em; text-transform: none; font-weight: 500; }
-.shr-qr { padding: 10px; border-radius: 14px; background: #fff; line-height: 0; box-shadow: var(--shadow); }
-.shr-qr canvas { width: 190px; height: 190px; image-rendering: pixelated; }
-.shr-qr[hidden] { display: none; }
-.shr-qr-note { margin: 0; max-width: 340px; }
-.shr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.shr-foot { margin: 16px 0 0; }
-.shr-join .shr-actions { margin-top: 12px; }
-.shr-join[hidden], .shr-scan[hidden] { display: none; }
-.shr-scan { display: grid; justify-items: center; gap: 8px; text-align: center; }
-.shr-video { width: min(320px, 100%); aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #000; }
-.shr-video video { width: 100%; height: 100%; object-fit: cover; }
-.shr-scan p { margin: 0; }
-.shr-refresh-all { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
-.shr-refresh-all b, .shr-refresh-all span { display: block; }
-
 /* ---------- Ajustes (features/settings.js) ---------- */
 .stg-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 4px; margin: -2px 0 18px; }
 .stg-tabs::-webkit-scrollbar { display: none; }

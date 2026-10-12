@@ -2,7 +2,7 @@
 // abra incluso sin conexión (los datos ya viven en IndexedDB,
 // que no depende del service worker).
 
-const CACHE_NAME = "viajoo-v51";
+const CACHE_NAME = "viajoo-v52";
 
 // Caché de teselas del mapa: va SEPARADA a propósito y con nombre
 // fijo (sin número de versión de la app), para que sobreviva a las
@@ -60,8 +60,6 @@ const EXTERNAL_SHELL = [
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
   "https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js",
   "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
-  "https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.js",
-  "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",
 ];
 
 self.addEventListener("install", (event) => {

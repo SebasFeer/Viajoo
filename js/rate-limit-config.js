@@ -1,16 +1,13 @@
 // ============================================================
-// rate-limit-config.js — Direcciones de las Cloud Functions que
-// ponen límites reales (por cuenta o por email) a acciones que antes
-// no tenían ninguno: unirse a un viaje compartido probando códigos, y
-// registrar una cuenta / pedir recuperar contraseña en bucle.
+// rate-limit-config.js — Dirección de la Cloud Function que pone
+// un límite real (por email) a registrar una cuenta / pedir
+// recuperar contraseña en bucle.
 //
-// Mientras esto esté vacío, esas dos acciones (unirse a un viaje
-// compartido, registrarse, recuperar contraseña) simplemente no
-// funcionan — no dejan un atajo sin protección, igual que
-// login-config.js con el inicio de sesión.
+// Mientras esto esté vacío, checkEmailActionQuota no bloquea nada
+// (se comporta como si siempre hubiera cupo) — no deja un atajo sin
+// protección, igual que login-config.js con el inicio de sesión.
 // ============================================================
 
-const JOIN_TRIP_ENDPOINT = "https://us-central1-travel-planner-e16e1.cloudfunctions.net/joinSharedTrip";
 const EMAIL_ACTION_QUOTA_ENDPOINT = "https://us-central1-travel-planner-e16e1.cloudfunctions.net/checkEmailActionQuota";
 
-export { JOIN_TRIP_ENDPOINT, EMAIL_ACTION_QUOTA_ENDPOINT };
+export { EMAIL_ACTION_QUOTA_ENDPOINT };

@@ -82,36 +82,3 @@ test("un viaje ya terminado con gastos sin saldar avisa del recordatorio de deud
   const bodies = (await page.evaluate(() => window.__notifications)).map((n) => n.body);
   expect(bodies.some((b) => b.includes("sin saldar") && b.includes("Praga"))).toBe(true);
 });
-
-test.describe("viaje compartido actualizado", () => {
-  test.use({ hasTouch: true });
-
-  test("un pull-to-refresh que trae cambios de un viaje compartido avisa una vez", async ({ page }) => {
-    await mockCloud(page, { loggedIn: false, syncOnLaunchResult: true });
-    await mockNotifications(page);
-    await openApp(page);
-
-    await activateNotifications(page);
-    await page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((m) => m.remove()));
-    await page.evaluate(() => {
-      window.__notifications = [];
-    });
-
-    await page.evaluate(() => {
-      const target = document.body;
-      const dispatch = (type, y) => {
-        const touch = new Touch({ identifier: 1, target, clientX: 195, clientY: y });
-        target.dispatchEvent(
-          new TouchEvent(type, { touches: type === "touchend" ? [] : [touch], changedTouches: [touch], bubbles: true, cancelable: true })
-        );
-      };
-      dispatch("touchstart", 50);
-      dispatch("touchmove", 160);
-      dispatch("touchend", 160);
-    });
-    await page.waitForTimeout(900);
-
-    const bodies = (await page.evaluate(() => window.__notifications)).map((n) => n.body);
-    expect(bodies.some((b) => b.includes("compartido"))).toBe(true);
-  });
-});

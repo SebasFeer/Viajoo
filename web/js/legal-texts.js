@@ -6,9 +6,8 @@
 // exactamente lo mismo. Si cambias uno de esos textos en la app,
 // copia el cambio aquí también.
 //
-// Los datos del titular siguen entre corchetes ([NOMBRE Y APELLIDOS],
-// [DNI/NIF], [DOMICILIO]) igual que en la app: hay que rellenarlos
-// con los datos reales antes de publicar.
+// El DNI/NIF del titular se omite a propósito, por protección de
+// datos personales — ver el comentario equivalente en js/app.js.
 // ============================================================
 
 const YEAR = new Date().getFullYear();
@@ -25,9 +24,8 @@ julio, de Servicios de la Sociedad de la Información y de Comercio
 Electrónico (LSSI-CE), se informa de que Viajoo es un proyecto
 personal cuyo titular es:
 
-Titular: [NOMBRE Y APELLIDOS]
-DNI/NIF: [DNI/NIF]
-Domicilio: [DOMICILIO]
+Titular: Sebastián Fernández
+Domicilio: Aguilar de Campoo, Palencia, España
 Correo de contacto: contacto@viajoo.es
 
 Por ahora Viajoo es una aplicación personal gratuita, sin
@@ -35,22 +33,46 @@ actividad económica real. Si eso cambia, este aviso se actualizará
 con los datos de actividad económica que correspondan.
 
 2. Objeto
-Viajoo es una aplicación web (PWA) para organizar viajes:
-itinerario, vuelos, hoteles, gastos, documentos y contenido
-relacionado, guardado principalmente en el propio dispositivo de
-quien la usa.
+Viajoo es una aplicación web (PWA), también distribuible como app de
+Android, para organizar viajes: itinerario, vuelos, hoteles, gastos,
+documentos y contenido relacionado, guardado principalmente en el
+propio dispositivo de quien la usa.
 
-3. Condiciones de acceso y uso
-El acceso a Viajoo es gratuito. Usar la aplicación implica
-aceptar este Aviso Legal, los Términos y Condiciones de Uso, y la
-Política de Privacidad.
+3. Alojamiento (hosting)
+La aplicación web se aloja en GitHub Pages (GitHub, Inc. / Microsoft).
+La cuenta, la copia en la nube y las funciones
+de servidor (Cloud Functions) se alojan en Firebase/Google Cloud
+Platform (Google Ireland Limited). Ver el detalle de cada proveedor en
+la Política de Privacidad.
 
-4. Legislación aplicable y fuero
+4. Condiciones de acceso y uso
+El acceso a Viajoo es gratuito. Usar la aplicación implica aceptar
+este Aviso Legal, los Términos y Condiciones de Uso, y la Política de
+Privacidad. Si no estás de acuerdo con alguno de estos documentos, no
+debes usar la aplicación.
+
+5. Normativa aplicable
+Este aviso, y el resto de documentos legales de Viajoo, se redactan
+conforme a la Ley 34/2002 (LSSI-CE), el Reglamento (UE) 2016/679
+(RGPD), la Ley Orgánica 3/2018 (LOPDGDD) y el Texto Refundido de la
+Ley General para la Defensa de los Consumidores y Usuarios (Real
+Decreto Legislativo 1/2007).
+
+6. Legislación aplicable y fuero
 Estas condiciones se rigen por la legislación española. Para
 cualquier controversia que no se resuelva por el canal de contacto y
 reclamaciones, y cuando la persona usuaria tenga la condición de
 consumidora, se estará a lo dispuesto por la normativa de protección
-de consumidores en cuanto a juzgados y tribunales competentes.`,
+de consumidores en cuanto a juzgados y tribunales competentes — que,
+por defecto, son los del domicilio de la persona consumidora, no los
+del titular de la app. Esta cláusula no puede usarse para obligar a
+un consumidor a litigar en un fuero distinto al que le corresponde
+por ley.
+
+7. Modificaciones de este aviso
+Este aviso puede actualizarse para reflejar cambios legales o de la
+propia app. La fecha de "Última actualización" de arriba indica la
+versión vigente.`,
   },
   {
     id: "privacidad",
@@ -58,8 +80,8 @@ de consumidores en cuanto a juzgados y tribunales competentes.`,
     text: `Última actualización: ${YEAR}
 
 Responsable del tratamiento
-[NOMBRE Y APELLIDOS], con DNI/NIF [DNI/NIF] y domicilio en
-[DOMICILIO], es quien responde de los datos que trata esta aplicación.
+Sebastián Fernández, con domicilio en Aguilar de Campoo, Palencia,
+España, es quien responde de los datos que trata esta aplicación.
 Puedes escribir a contacto@viajoo.es para cualquier duda sobre esta
 política o para ejercer tus derechos.
 
@@ -74,9 +96,9 @@ Si creas una cuenta (con email y contraseña, o con tu cuenta de Google),
 tus datos se guardan también en Firebase (Google) bajo tu usuario, para
 poder recuperarlos en otro dispositivo. Puedes cerrar sesión y eliminar tu
 cuenta cuando quieras. Las funciones básicas siguen funcionando sin
-cuenta, de forma 100% local; algunas funciones concretas (viajes
-compartidos, conversor de moneda, ordenar ruta, exportar a PDF), en
-cambio, sí piden tener una cuenta creada — gratuita, sin ningún cobro.
+cuenta, de forma 100% local; algunas funciones concretas (conversor de
+moneda, ordenar ruta, exportar a PDF), en cambio, sí piden tener una
+cuenta creada — gratuita, sin ningún cobro.
 
 3. Servicios externos que puede consultar la app
 Para mostrar mapas, calcular rutas, encontrar fotos e imágenes reales de
@@ -94,16 +116,24 @@ puntuales, en cada visita el navegador carga las tipografías de la app
 revela tu dirección IP a Google mientras descarga la fuente (ver también
 Cookies y almacenamiento local).
 
-4. Viajes compartidos
-Si compartes un viaje con un código de 6 dígitos (o su QR, que solo
-contiene ese mismo código), sus datos (vuelos, hoteles, itinerario...)
-se guardan en un documento de Firestore accesible por quienes tengan
-el código, además de en tu copia personal de la nube. Cualquiera con
-el código o el QR puede ver y unirse a ese viaje mientras esté activo.
-Al escanear un QR para unirte a un viaje, la app usa la cámara del
-dispositivo solo mientras la ventana de escaneo está abierta: ese
-vídeo nunca se guarda ni se envía a ningún sitio, solo se analiza en
-el propio dispositivo para leer el código.
+4. Encargados del tratamiento (a quién recurrimos para operar Viajoo)
+Cuando usas una función que lo requiere, estos proveedores tratan datos
+por cuenta nuestra, bajo contrato de encargo del tratamiento (art. 28
+RGPD) o como responsables independientes de su propio servicio público:
+- Google Ireland Limited (Firebase/Google Cloud): cuenta, copia en la
+  nube, funciones de servidor, Google Analytics y Google Fonts.
+- GitHub, Inc. / Microsoft: alojamiento de la aplicación web (GitHub
+  Pages).
+- Deomail: envío de emails transaccionales (formulario de contacto,
+  avisos de seguridad de tu cuenta).
+- OpenStreetMap/Nominatim, OSRM, Overpass, Wikipedia/Wikimedia
+  Commons/Openverse, Frankfurter/open.er-api: servicios públicos de
+  mapas, lugares, fotos y tipos de cambio (ver punto 3).
+Ninguno de estos proveedores puede usar tus datos para fines propios
+distintos de prestarnos su servicio, salvo lo que sus propias
+condiciones indiquen para los servicios públicos gratuitos del último
+grupo (mapas, fotos, tipos de cambio), que reciben solo el texto puntual
+de la consulta, nunca tu identidad.
 
 5. Notificaciones
 Si activas los avisos, se generan en tu propio dispositivo a partir de tus
@@ -128,42 +158,71 @@ completó. Nadie más que tú puede ver ni recuperar tu PIN.
 8. Estadísticas de uso y publicidad
 Viajoo no muestra publicidad dentro de la app. Sí incluye Google
 Analytics para medir el uso (qué pantallas se abren, qué funciones se
-usan), pero apagado por defecto: solo se activa si tú mismo lo
-enciendes en Ajustes → Preferencias → Estadísticas de uso, y puedes
-apagarlo cuando quieras desde el mismo sitio. Mientras no lo
-actives, no se carga nada de Google Analytics ni se manda ningún
-dato. Nunca incluye tus viajes, gastos ni nada de lo que guardas
-dentro de la app — ver más detalle en Cookies y almacenamiento local.
+usan, tipo de dispositivo), activo de forma continua para poder
+mejorar la aplicación — ver la base legal en el punto 10 y cómo
+impedirlo en Cookies y almacenamiento local. Nunca incluye tus viajes,
+gastos ni nada de lo que guardas dentro de la app.
 
-9. Base legal y conservación de tus datos
-Tratamos tus datos para prestarte el servicio que pides (organizar tus
-viajes) y, cuando das tu consentimiento expreso, para funciones
-opcionales concretas (copia en la nube, PIN, biometría, notificaciones,
-viajes compartidos). Tus datos se conservan mientras mantengas la app
-instalada y, si tienes cuenta, hasta que la elimines o nos pidas que
-la borremos.
+9. Seguridad y prevención de abusos
+Para proteger tu cuenta y el servicio, tratamos de forma limitada datos
+técnicos (intentos de inicio de sesión, de registro y de recuperar
+contraseña) con el único fin de detectar y frenar patrones de abuso
+(fuerza bruta, registro o sincronización masiva). Esta base es nuestro
+interés legítimo en mantener el servicio seguro (art. 6.1.f RGPD),
+ponderado para no afectar a tu privacidad más de lo necesario: estos
+datos solo se usan para ese fin, con un límite de conservación corto,
+y son accesibles únicamente desde nuestras funciones de servidor.
 
-10. Tus derechos
+10. Base legal y conservación de tus datos
+Tratamos tus datos: (a) para prestarte el servicio que pides —
+organizar tus viajes—, lo que es necesario para ejecutar el contrato
+de uso que aceptas al usar la app; (b) con tu consentimiento expreso,
+para funciones opcionales concretas (copia en la nube, PIN, biometría,
+notificaciones), consentimiento que puedes retirar en cualquier
+momento sin que afecte a lo ya hecho antes de retirarlo; y (c) por
+interés legítimo, para la seguridad descrita en el punto 9 y para las
+estadísticas de uso del punto 8 — en este último caso, limitando el
+dato a lo mínimo necesario para entender el uso agregado de la app,
+nunca tu identidad ni tu actividad concreta, y permitiendo que lo
+bloquees desde tu navegador en cualquier momento (ver Cookies y
+almacenamiento local). Tus datos se conservan mientras mantengas la
+app instalada y, si tienes cuenta, hasta que la elimines o nos pidas
+que la borremos; los datos técnicos de seguridad del punto 9 se
+conservan solo el tiempo necesario para ese fin.
+
+11. Tus derechos
 Tienes derecho a acceder, rectificar, suprimir, limitar y oponerte al
 tratamiento de tus datos, y a la portabilidad de los mismos. Como la
 mayoría de tus datos viven solo en tu dispositivo, ya ejerces varios de
 estos derechos tú mismo desde Ajustes → Copiar / restaurar datos
 (exportar o borrar) y Ajustes → Mi cuenta (eliminar la cuenta). Para lo
-que no puedas hacer directamente, escríbenos a contacto@viajoo.es. Si
+que no puedas hacer directamente, escríbenos a contacto@viajoo.es;
+respondemos en el plazo de un mes que marca el RGPD (ampliable dos
+meses más en solicitudes complejas, avisándote del motivo). Si
 consideras que no hemos atendido bien tu solicitud, puedes reclamar ante
 la Agencia Española de Protección de Datos (www.aepd.es).
 
-11. Transferencias internacionales
-Firebase (Google) puede tratar datos en servidores fuera del Espacio
-Económico Europeo, acogido a las garantías que exige el RGPD (cláusulas
-contractuales tipo u otro mecanismo equivalente).
+12. Transferencias internacionales
+Google (Firebase) puede tratar datos en servidores fuera del Espacio
+Económico Europeo (por ejemplo, en Estados Unidos). Estas
+transferencias se acogen a las garantías que exige el capítulo V del
+RGPD: las Cláusulas Contractuales Tipo de la Comisión Europea y la
+adhesión de Google al EU-U.S. Data Privacy Framework. Puedes pedirnos
+una copia de las garantías aplicables escribiendo a contacto@viajoo.es.
 
-12. Menores de edad
+13. Brechas de seguridad
+Si se produjera una violación de seguridad de tus datos personales que
+suponga un riesgo para tus derechos, lo notificaremos a la Agencia
+Española de Protección de Datos en el plazo de 72 horas desde que
+tengamos constancia (art. 33 RGPD) y te avisaremos directamente si el
+riesgo es alto (art. 34 RGPD).
+
+14. Menores de edad
 Viajoo no está dirigida a menores de 14 años. Si eres menor de
 edad, necesitas el consentimiento de tus padres o tutores para crear
 una cuenta o activar funciones que impliquen guardar datos en la nube.
 
-13. Contacto
+15. Contacto
 Si tienes dudas sobre tus datos o esta política, puedes escribirnos a
 contacto@viajoo.es.`,
   },
@@ -192,48 +251,102 @@ autorizado.
 4. Uso aceptable
 Te comprometes a usar Viajoo de forma lícita, sin:
 - Intentar acceder a datos de otras personas usuarias sin autorización.
-- Usar la función de compartir viajes para distribuir contenido
-  ilegal, ofensivo o que infrinja derechos de terceros.
 - Interferir con el funcionamiento de la app o de los servicios de
-  terceros que consulta (mapas, tipos de cambio...).
+  terceros que consulta (mapas, tipos de cambio...), incluyendo
+  intentar saltarte los límites de uso del punto 5.
+- Usar la app con fines fraudulentos o para dañar a terceros.
 
-5. Contenido que introduces tú
+5. Uso justo de las funciones con límite
+Algunas funciones (registro de cuenta, recuperar contraseña) tienen un
+límite diario de intentos por cuenta o por email, aplicado en el
+servidor para que sea real y no se pueda esquivar. Estos límites
+existen para mantener el servicio disponible y evitar abusos (por
+ejemplo, probar contraseñas al azar); podemos ajustarlos sin previo
+aviso si es necesario para proteger la app.
+
+6. Contenido que introduces tú
 Los datos de tus viajes (destinos, notas, fotos que subas si lo haces...)
 son tuyos. Nos das permiso únicamente para procesarlos y mostrártelos a
-ti (y a quien invites, si compartes un viaje), nunca para usarlos con
-otro fin. Ver también Propiedad intelectual.
+ti, nunca para usarlos con otro fin. Ver también Propiedad intelectual.
+Eres el único responsable del contenido que introduces, y de que no
+infrinja derechos de terceros ni la ley — ver también el punto 10
+(indemnización).
 
-6. Disponibilidad del servicio
+7. Disponibilidad del servicio
 Viajoo depende en parte de servicios externos gratuitos (mapas,
 tipos de cambio, geocodificación...) que pueden fallar o dejar de
 estar disponibles sin previo aviso; la app está pensada para seguir
 funcionando con lo que ya tengas guardado localmente aunque eso pase.
 No garantizamos que el servicio esté disponible de forma
-ininterrumpida.
+ininterrumpida, ni que esté libre de errores.
 
-7. Cambios en la app y en estas condiciones
+8. Cambios en la app y en estas condiciones
 Podemos añadir, cambiar o retirar funciones, y actualizar estas
-condiciones. Si el cambio es importante, avisaremos dentro de la app.
-Seguir usando Viajoo después de un cambio implica que lo
-aceptas.
+condiciones. Si el cambio es importante, avisaremos dentro de la app
+con antelación razonable. Seguir usando Viajoo después de un cambio
+implica que lo aceptas; si no lo aceptas, debes dejar de usar la app.
 
-8. Limitación de responsabilidad
-Viajoo se ofrece "tal cual". Dentro de lo que permite la ley, no
-respondemos de decisiones de viaje que tomes basándote en datos de la
-app (tipos de cambio, horarios, distancias...) ni de fallos de los
-servicios externos que consulta. Revisa siempre la información
+9. Limitación de responsabilidad
+Viajoo se ofrece "tal cual" y "según disponibilidad", sin garantías de
+que sea ininterrumpida o esté libre de errores. Dentro de lo que
+permite la ley, no respondemos de: decisiones de viaje que tomes
+basándote en datos de la app (tipos de cambio, horarios, distancias...);
+fallos, indisponibilidad o cambios en los servicios externos que
+consulta; ni de daños indirectos, lucro cesante o pérdida de datos no
+imputable a dolo o negligencia grave por nuestra parte. Nada en esta
+cláusula excluye ni limita la responsabilidad por dolo, negligencia
+grave, muerte o lesiones personales, ni ningún derecho que la
+normativa de consumidores te reconozca de forma imperativa: donde la
+ley no permita limitar la responsabilidad, esta cláusula se aplica
+solo hasta donde la ley sí lo permite. Revisa siempre la información
 importante (horarios de vuelo, tipos de cambio, reservas) con la
 fuente oficial antes de viajar.
 
-9. Terminación
+10. Indemnización
+Si tu incumplimiento de estas condiciones (por ejemplo, introducir
+contenido ilegal o infractor, o un uso fraudulento de la app) nos causa
+un daño o da lugar a una reclamación de terceros, te comprometes a
+responder de ello en la medida que corresponda según la ley, sin que
+esto afecte a los derechos que tengas como persona consumidora.
+
+11. Contenido ilícito y retirada
+Si crees que algún contenido de la app infringe tus derechos, o es por
+otro motivo ilícito, escríbenos a contacto@viajoo.es con el detalle.
+Revisaremos la notificación y, si procede, retiraremos el contenido o
+suspenderemos el acceso de quien lo introdujo, sin perjuicio de las
+acciones legales que correspondan.
+
+12. Fuerza mayor
+No responderemos de incumplimientos causados por circunstancias fuera
+de nuestro control razonable (caídas de proveedores externos, cortes de
+red o de suministro, catástrofes, actos de autoridad, etc.).
+
+13. Terminación
 Puedes dejar de usar la app y borrar tus datos cuando quieras (Ajustes
 → Copiar / restaurar datos, o eliminar tu cuenta). Podemos suspender el
 acceso a quien incumpla gravemente estas condiciones (por ejemplo,
-abusando de la función de compartir viajes).
+abusando de los límites de uso).
 
-10. Legislación aplicable
+14. Resolución de conflictos
+Antes de acudir a la vía judicial, intenta resolver cualquier
+desacuerdo escribiendo a contacto@viajoo.es (ver Contacto y
+reclamaciones) — la mayoría de incidencias se resuelven así. Como
+alternativa voluntaria y gratuita a un juicio, si eres consumidor
+puedes acudir a las Juntas Arbitrales de Consumo de tu comunidad
+autónoma.
+
+15. Divisibilidad y acuerdo completo
+Si algún tribunal declara inválida o inaplicable alguna cláusula de
+estas condiciones, el resto sigue en vigor; la cláusula inválida se
+sustituye por otra que refleje su intención original dentro de lo que
+permite la ley. Estas condiciones, junto con el Aviso Legal y la
+Política de Privacidad, son el acuerdo completo entre tú y Viajoo
+sobre su uso. Que no apliquemos una cláusula en un caso concreto no
+significa que renunciemos a ella.
+
+16. Legislación aplicable
 Estas condiciones se rigen por la ley española (ver también Aviso
-Legal).`,
+Legal, punto 6, sobre el fuero aplicable).`,
   },
   {
     id: "propiedad-intelectual",
@@ -243,7 +356,7 @@ Legal).`,
 1. Titularidad
 El código, el diseño, la marca "Viajoo" y los contenidos propios
 de la aplicación (textos, iconos e interfaz) son propiedad de
-[NOMBRE Y APELLIDOS], salvo el software de terceros con licencia propia
+Sebastián Fernández, salvo el software de terceros con licencia propia
 (ver Licencias).
 
 2. Uso permitido
@@ -254,8 +367,11 @@ del software de terceros que incluye.
 
 3. Tus contenidos
 Los datos y contenidos que introduces (notas, fotos que subas si lo
-haces, nombres de tus viajes...) siguen siendo tuyos. Ver también la
-sección "Contenido que introduces tú" de los Términos y Condiciones.
+haces, nombres de tus viajes...) siguen siendo tuyos. Al introducirlos,
+nos das una licencia limitada, no exclusiva y revocable (se extingue si
+borras el contenido o tu cuenta) para almacenarlos y mostrártelos a ti
+únicamente con el fin de prestarte el servicio. Ver también la sección
+"Contenido que introduces tú" de los Términos y Condiciones.
 
 4. Contenido de terceros mostrado en la app
 Algunas fotos, descripciones y datos de mapas que se muestran vienen de
@@ -278,7 +394,9 @@ servicio.
 6. Reclamaciones de propiedad intelectual
 Si crees que algo en la app infringe tus derechos de propiedad
 intelectual, escríbenos a contacto@viajoo.es con el detalle para poder
-revisarlo.`,
+revisarlo. Igual que con cualquier otro contenido ilícito (ver el punto
+11 de los Términos y Condiciones de Uso), revisaremos la notificación
+y retiraremos el contenido si procede.`,
   },
   {
     id: "cookies",
@@ -300,14 +418,14 @@ Puedes borrar todo esto en cualquier momento desde los ajustes de tu
 navegador ("borrar datos del sitio"), o desde Ajustes → Copiar /
 restaurar datos dentro de la app.
 
-3. Estadísticas de uso (Google Analytics) — apagado por defecto
-Ajustes → Preferencias → Estadísticas de uso deja activar, de forma
-voluntaria, que Viajoo mande a Google Analytics datos anónimos de uso
-(qué pantallas se abren, qué funciones se usan) para saber qué
-mejorar. Mientras no lo actives tú mismo, no se carga nada de Google
-Analytics ni se manda ningún dato. Nunca incluye tus viajes, gastos
-ni nada de lo que guardas dentro de la app, y puedes desactivarlo en
-cualquier momento desde el mismo ajuste.
+3. Estadísticas de uso (Google Analytics)
+Viajoo manda a Google Analytics datos de uso (qué pantallas se abren,
+qué funciones se usan, tipo de dispositivo) para saber qué mejorar.
+Esto funciona de forma continua, sin un interruptor dentro de la app
+para desactivarlo. Nunca incluye tus viajes, gastos ni nada de lo que
+guardas dentro de la app. Si quieres impedirlo, puedes bloquear el
+dominio de Google Analytics (google-analytics.com, googletagmanager.com)
+con un bloqueador de contenido en tu navegador.
 
 4. Fuentes de Google Fonts
 Para mostrar su tipografía, la app carga las fuentes Plus Jakarta Sans,
@@ -342,9 +460,14 @@ contacto@viajoo.es.
 Si no estás satisfecho con la respuesta, o quieres presentar una
 reclamación formal, puedes:
 - Pedir la hoja de reclamaciones escribiendo a contacto@viajoo.es.
+- Si eres consumidor, acudir a las Juntas Arbitrales de Consumo de tu
+  comunidad autónoma (arbitraje de consumo: gratuito, voluntario para
+  ambas partes y más rápido que un juicio).
 - Si la reclamación es sobre el tratamiento de tus datos personales,
   puedes acudir a la Agencia Española de Protección de Datos
   (www.aepd.es).
+Nada de lo anterior te impide acudir directamente a la vía judicial si
+lo prefieres.
 
 3. Tiempo de respuesta
 Al ser un proyecto personal, procuramos responder en un plazo
@@ -366,12 +489,8 @@ que exigen dar crédito a su autoría:
   © colaboradores de SortableJS.
 - jsPDF — generación del PDF del mapa y del itinerario en el propio
   dispositivo. Licencia MIT. © autores de jsPDF.
-- qrcode — generación del código QR para compartir un viaje. Licencia
-  MIT. © Ryan Day (soldair) y colaboradores.
-- jsQR — lectura de códigos QR con la cámara. Licencia Apache 2.0.
-  © Cosmo Wolfe.
-- Firebase JS SDK — cuenta, copia en la nube y viajes compartidos
-  (Google). Licencia Apache 2.0.
+- Firebase JS SDK — cuenta y copia en la nube (Google). Licencia
+  Apache 2.0.
 - Datos de mapas de OpenStreetMap — © colaboradores de OpenStreetMap,
   licencia Open Database License (ODbL) 1.0.
 - Tipografías Plus Jakarta Sans, Inter e IBM Plex Mono — Google Fonts,

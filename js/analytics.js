@@ -1,15 +1,12 @@
 // ============================================================
-// analytics.js — Estadísticas de uso anónimas (Firebase
-// Analytics / Google Analytics), con dos condiciones para que
-// funcione de verdad:
-//
-//   1. Que el proyecto Firebase tenga Analytics activado (rellena
-//      "measurementId" en firebase-config.js — sin eso, esto no
-//      hace nada, ni siquiera intenta cargar nada).
-//   2. Que la persona haya activado "Estadísticas de uso" en
-//      Ajustes → Preferencias (por defecto está APAGADO). Sin ese
-//      consentimiento, nunca se carga el SDK de Analytics ni se
-//      manda ningún dato — ni para quien nunca inicia sesión.
+// analytics.js — Estadísticas de uso (Firebase Analytics / Google
+// Analytics) para que el desarrollador vea cómo se usa la app. Se
+// activa sola en cuanto el proyecto Firebase tiene Analytics
+// configurado (rellena "measurementId" en firebase-config.js — sin
+// eso, esto no hace nada, ni siquiera intenta cargar nada). No hay
+// ningún interruptor para la persona usuaria: se informa de esto en
+// la Política de Privacidad y en Cookies y almacenamiento local, sin
+// pedir una confirmación aparte dentro de la app.
 //
 // Es independiente de cloud.js (que solo carga el SDK de Firebase
 // al iniciar sesión / sincronizar): así también puede medir uso de
@@ -20,10 +17,8 @@
 // ============================================================
 
 import { firebaseConfig } from "./firebase-config.js";
-import { Data } from "./db.js";
 
 const SDK_BASE = "https://www.gstatic.com/firebasejs/12.19.0";
-const CONSENT_KEY = "analytics_consent";
 
 let analyticsInstance = null;
 let logEventFn = null;
@@ -59,29 +54,18 @@ async function loadAnalytics() {
   return loadingPromise;
 }
 
-async function hasAnalyticsConsent() {
-  const value = await Data.settingGet(CONSENT_KEY).catch(() => false);
-  return value === true;
+/** Se llama una vez al arrancar la app: carga Analytics de una vez
+ * si está configurado (para no esperar al primer track() y perderse
+ * el primer evento). */
+async function initAnalytics() {
+  await loadAnalytics();
 }
 
-async function setAnalyticsConsent(value) {
-  await Data.settingSet(CONSENT_KEY, !!value);
-  if (value) await loadAnalytics();
-}
-
-/** Se llama una vez al arrancar la app: si ya se había dado
- * consentimiento en una sesión anterior, carga Analytics de una vez
- * (para no esperar al primer track() y perderse el primer evento). */
-async function initAnalyticsIfConsented() {
-  if (await hasAnalyticsConsent()) await loadAnalytics();
-}
-
-/** Registra un evento de uso (p. ej. "trip_created"), solo si hay
- * consentimiento y Analytics está configurado. Nunca lanza: un fallo
- * aquí no debe afectar a la función que se estaba usando de verdad. */
+/** Registra un evento de uso (p. ej. "trip_created"), si Analytics
+ * está configurado. Nunca lanza: un fallo aquí no debe afectar a la
+ * función que se estaba usando de verdad. */
 async function track(eventName, params) {
   try {
-    if (!(await hasAnalyticsConsent())) return;
     const instance = await loadAnalytics();
     if (!instance || !logEventFn) return;
     logEventFn(instance, eventName, params);
@@ -90,4 +74,4 @@ async function track(eventName, params) {
   }
 }
 
-export { isAnalyticsConfigured, hasAnalyticsConsent, setAnalyticsConsent, initAnalyticsIfConsented, track };
+export { isAnalyticsConfigured, initAnalytics, track };
