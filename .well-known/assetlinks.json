@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.sebasfeer.viajoo",
+      "sha256_cert_fingerprints": [
+        "BF:51:F1:5D:25:84:BC:29:2F:2C:C9:CB:0C:FF:92:C2:A0:ED:99:FD:2E:17:0A:28:A3:EA:71:D3:C1:F6:23:21"
+      ]
+    }
+  }
+]
