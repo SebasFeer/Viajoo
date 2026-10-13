@@ -156,12 +156,16 @@ guarda tu huella o tu cara, solo la confirmación de que el gesto se
 completó. Nadie más que tú puede ver ni recuperar tu PIN.
 
 8. Estadísticas de uso y publicidad
-Viajoo no muestra publicidad dentro de la app. Sí incluye Google
-Analytics para medir el uso (qué pantallas se abren, qué funciones se
-usan, tipo de dispositivo), activo de forma continua para poder
-mejorar la aplicación — ver la base legal en el punto 10 y cómo
-impedirlo en Cookies y almacenamiento local. Nunca incluye tus viajes,
-gastos ni nada de lo que guardas dentro de la app.
+Dentro de la app (esta PWA y la app de Android) no se muestra
+publicidad. Sí incluye Google Analytics para medir el uso (qué
+pantallas se abren, qué funciones se usan, tipo de dispositivo), activo
+de forma continua para poder mejorar la aplicación — ver la base legal
+en el punto 10 y cómo impedirlo en Cookies y almacenamiento local.
+Nunca incluye tus viajes, gastos ni nada de lo que guardas dentro de
+la app. La web de viajoo.es (fuera de la app, para quien todavía no
+tiene una cuenta) puede mostrar anuncios de Google AdSense: ver el
+punto correspondiente en Cookies y almacenamiento local para cómo
+funcionan y cómo decidir si los permites.
 
 9. Seguridad y prevención de abusos
 Para proteger tu cuenta y el servicio, tratamos de forma limitada datos
@@ -403,22 +407,37 @@ y retiraremos el contenido si procede.`,
     title: "Cookies y almacenamiento local",
     text: `Última actualización: ${YEAR}
 
-1. Viajoo no usa cookies de rastreo ni publicitarias
-Esta aplicación no coloca cookies propias ni de terceros con fines de
-publicidad o seguimiento entre sitios.
+1. Dentro de la app, Viajoo no usa cookies de rastreo ni publicitarias
+Esta aplicación (la PWA y la app de Android) no coloca cookies propias
+ni de terceros con fines de publicidad o seguimiento entre sitios.
 
-2. Qué guarda tu navegador entonces
+2. Publicidad en la web (Google AdSense)
+La web de viajoo.es — las páginas públicas fuera de la propia app,
+pensadas para quien todavía no la usa — puede mostrar anuncios de
+Google AdSense. Para eso, Google puede colocar cookies y usar
+identificadores del dispositivo con el fin de mostrar anuncios, medir
+su rendimiento y, si lo permites, personalizarlos según tu actividad
+en otros sitios. Al entrar en esas páginas verás un aviso para elegir
+si permites anuncios personalizados o no; sin tu permiso, no se piden
+anuncios personalizados. Puedes cambiar tu elección cuando quieras
+desde el enlace "Preferencias de cookies" al final de esas páginas.
+Puedes consultar cómo trata Google estos datos en
+https://policies.google.com/technologies/ads. Esto no afecta a la app
+en sí (PWA ni Android), donde nunca hay anuncios.
+
+3. Qué guarda tu navegador entonces (dentro de la app)
 En vez de cookies, Viajoo guarda tus datos en dos almacenes
 propios del navegador, que solo esta app puede leer y que nunca se
 envían a ningún sitio salvo que actives tú la copia en la nube:
 - IndexedDB: tus viajes, vuelos, hoteles, gastos, itinerario, y el
   resto de contenido que creas dentro de la app.
-- localStorage: ajustes sueltos (por ejemplo, el tema claro/oscuro).
+- localStorage: ajustes sueltos (por ejemplo, el tema claro/oscuro, y
+  tu elección sobre anuncios si la has hecho en la web).
 Puedes borrar todo esto en cualquier momento desde los ajustes de tu
 navegador ("borrar datos del sitio"), o desde Ajustes → Copiar /
 restaurar datos dentro de la app.
 
-3. Estadísticas de uso (Google Analytics)
+4. Estadísticas de uso (Google Analytics)
 Viajoo manda a Google Analytics datos de uso (qué pantallas se abren,
 qué funciones se usan, tipo de dispositivo) para saber qué mejorar.
 Esto funciona de forma continua, sin un interruptor dentro de la app
@@ -427,7 +446,7 @@ guardas dentro de la app. Si quieres impedirlo, puedes bloquear el
 dominio de Google Analytics (google-analytics.com, googletagmanager.com)
 con un bloqueador de contenido en tu navegador.
 
-4. Fuentes de Google Fonts
+5. Fuentes de Google Fonts
 Para mostrar su tipografía, la app carga las fuentes Plus Jakarta Sans,
 Inter e IBM Plex Mono desde fonts.googleapis.com. Esta petición ocurre
 en cada visita (no depende de que actives nada) y, como cualquier
@@ -435,17 +454,18 @@ carga desde un servidor externo, revela tu dirección IP a Google
 mientras se descarga la fuente. No se usa para publicidad ni para
 identificarte.
 
-5. Firebase (si inicias sesión)
+6. Firebase (si inicias sesión)
 Si creas una cuenta o inicias sesión con Google, el SDK de Firebase
 puede usar almacenamiento local del navegador (no necesariamente
 cookies) para mantener tu sesión iniciada entre visitas. Esto solo
 ocurre si decides iniciar sesión.
 
-6. Cómo desactivarlo
+7. Cómo desactivarlo
 Puedes bloquear el almacenamiento local desde los ajustes de tu
 navegador, pero ten en cuenta que Viajoo necesita IndexedDB
 para guardar tus viajes: si lo bloqueas por completo, la app no podrá
-funcionar.`,
+funcionar. Las cookies de publicidad de la web (punto 2) se controlan
+aparte, desde el aviso al entrar o "Preferencias de cookies".`,
   },
   {
     id: "contacto",

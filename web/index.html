@@ -14,7 +14,20 @@
 <link rel="stylesheet" href="css/web.css" />
 <!-- Google AdSense: verificación del sitio. Todavía no sirve anuncios
      reales (eso llega cuando Google apruebe la cuenta) — ver aviso
-     sobre publicidad en Cookies y Política de Privacidad. -->
+     sobre publicidad en Cookies y Política de Privacidad. El script
+     inline de abajo lee la elección guardada (si hay) ANTES de que
+     cargue adsbygoogle.js, para que nunca se pidan anuncios
+     personalizados sin permiso ni en la primera carga de la página;
+     consent.js (más abajo, en el body) muestra el aviso si aún no
+     hay elección guardada. -->
+<script>
+  (function () {
+    var consent;
+    try { consent = JSON.parse(localStorage.getItem("viajoo_ads_consent")); } catch (e) {}
+    window.adsbygoogle = window.adsbygoogle || [];
+    window.adsbygoogle.requestNonPersonalizedAds = consent && consent.choice === "granted" ? 0 : 1;
+  })();
+</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7904797979314759" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -286,6 +299,7 @@
       <a href="legal.html#terminos">Términos</a>
       <a href="legal.html#cookies">Cookies</a>
       <a href="legal.html#aviso-legal">Aviso legal</a>
+      <a href="#" data-cookie-prefs>Preferencias de cookies</a>
     </nav>
   </div>
 </footer>
@@ -329,6 +343,10 @@
       requestAnimationFrame(step);
     });
   }
+</script>
+<script type="module">
+  import { initConsent } from "./js/consent.js";
+  initConsent();
 </script>
 </body>
 </html>

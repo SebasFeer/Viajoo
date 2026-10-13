@@ -9,6 +9,14 @@
 <link rel="icon" href="../icons/icon-192.png" />
 <link rel="stylesheet" href="css/web.css" />
 <!-- Google AdSense: verificación del sitio. Ver nota en index.html. -->
+<script>
+  (function () {
+    var consent;
+    try { consent = JSON.parse(localStorage.getItem("viajoo_ads_consent")); } catch (e) {}
+    window.adsbygoogle = window.adsbygoogle || [];
+    window.adsbygoogle.requestNonPersonalizedAds = consent && consent.choice === "granted" ? 0 : 1;
+  })();
+</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7904797979314759" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -42,12 +50,15 @@
       <a href="./">Inicio</a>
       <a href="mis-viajes.html">Entrar</a>
       <a href="../">App móvil</a>
+      <a href="#" data-cookie-prefs>Preferencias de cookies</a>
     </nav>
   </div>
 </footer>
 
 <script type="module">
   import { LEGAL_DOCS } from "./js/legal-texts.js";
+  import { initConsent } from "./js/consent.js";
+  initConsent();
 
   const toc = document.getElementById("toc");
   const docs = document.getElementById("docs");
